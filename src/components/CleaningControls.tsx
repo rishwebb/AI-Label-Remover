@@ -1,0 +1,139 @@
+import React from 'react';
+import type { CleaningMode } from '../engine/types';
+import { Sparkles, Shield, RefreshCw, Zap } from 'lucide-react';
+
+interface CleaningControlsProps {
+  selectedMode: CleaningMode;
+  setSelectedMode: (mode: CleaningMode) => void;
+  onClean: () => void;
+  isCleaning: boolean;
+  disabled: boolean;
+}
+
+export const CleaningControls: React.FC<CleaningControlsProps> = ({
+  selectedMode,
+  setSelectedMode,
+  onClean,
+  isCleaning,
+  disabled
+}) => {
+  const modes: Array<{
+    id: CleaningMode;
+    title: string;
+    badge: string;
+    description: string;
+    icon: React.ReactNode;
+    tagClass: string;
+  }> = [
+    {
+      id: 'ANTI_AI',
+      title: 'Anti-AI Tag Mode',
+      badge: 'Instagram Focus',
+      description: 'Slices out C2PA JUMBF (APP11) manifests and IPTC generative AI markers. Keeps camera profiles and orientation losslessly.',
+      icon: <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400" />,
+      tagClass: 'bg-cyan-950 text-cyan-300 border-cyan-800'
+    },
+    {
+      id: 'FULL_PRIVACY',
+      title: 'Full Privacy Shield',
+      badge: 'Zero Digital Trace',
+      description: 'Removes C2PA manifests plus all GPS coordinates, camera serial numbers, creator info, timestamps, and edit history.',
+      icon: <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />,
+      tagClass: 'bg-emerald-950 text-emerald-300 border-emerald-800'
+    },
+    {
+      id: 'CANVAS_REGEN',
+      title: 'Canvas Deep Wipe',
+      badge: 'Pixel Re-render',
+      description: 'Decodes raw pixels to an off-screen canvas and re-encodes a fresh container. Completely purges all possible hidden containers.',
+      icon: <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />,
+      tagClass: 'bg-amber-950 text-amber-300 border-amber-800'
+    }
+  ];
+
+  return (
+    <div className="bg-[#111726] border border-slate-800 rounded-2xl p-4 sm:p-6 space-y-4 sm:space-y-6">
+      <div>
+        <h3 className="text-xs sm:text-sm font-mono uppercase text-slate-400 tracking-wider">
+          Step 2: Choose Sanitization Profile
+        </h3>
+        <p className="text-[11px] sm:text-xs text-slate-400 mt-1">
+          Select how aggressively you want to strip metadata from the image.
+        </p>
+      </div>
+
+      {/* Mode Selection Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 sm:gap-3">
+        {modes.map((mode) => {
+          const isSelected = selectedMode === mode.id;
+          return (
+            <div
+              key={mode.id}
+              onClick={() => setSelectedMode(mode.id)}
+              className={`cursor-pointer rounded-xl p-3 sm:p-4 border transition-all text-left flex flex-col justify-between ${
+                isSelected
+                  ? 'border-cyan-400 bg-cyan-950/20 shadow-lg shadow-cyan-500/10 ring-1 ring-cyan-400/40'
+                  : 'border-slate-800 bg-[#0d1320] hover:border-slate-700 hover:bg-[#101728]'
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-2 sm:mb-3">
+                  <div className="p-1.5 sm:p-2 rounded-lg bg-slate-900 border border-slate-800">
+                    {mode.icon}
+                  </div>
+                  <span className={`text-[9px] sm:text-[10px] font-mono px-2 py-0.5 rounded border ${mode.tagClass}`}>
+                    {mode.badge}
+                  </span>
+                </div>
+                <h4 className={`font-semibold text-xs sm:text-sm mb-1 ${isSelected ? 'text-white' : 'text-slate-200'}`}>
+                  {mode.title}
+                </h4>
+                <p className="text-[11px] sm:text-xs text-slate-400 leading-relaxed">
+                  {mode.description}
+                </p>
+              </div>
+
+              <div className="mt-3 sm:mt-4 pt-2.5 sm:pt-3 border-t border-slate-800/80 flex items-center gap-2">
+                <div
+                  className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                    isSelected ? 'border-cyan-400 bg-cyan-500' : 'border-slate-700'
+                  }`}
+                >
+                  {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-[#0a0d14]" />}
+                </div>
+                <span className="text-[10px] sm:text-[11px] font-mono text-slate-300">
+                  {isSelected ? 'Active Profile' : 'Select'}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Action Button */}
+      <div className="pt-1 sm:pt-2">
+        <button
+          onClick={onClean}
+          disabled={disabled || isCleaning}
+          className={`w-full py-3 sm:py-3.5 px-4 sm:px-6 rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-lg active:scale-[0.99] ${
+            disabled || isCleaning
+              ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+              : 'bg-gradient-to-r from-cyan-500 hover:from-cyan-400 to-indigo-600 hover:to-indigo-500 text-white shadow-cyan-500/20 hover:shadow-cyan-500/30 ring-1 ring-cyan-300/30'
+          }`}
+        >
+          {isCleaning ? (
+            <>
+              <RefreshCw className="w-4 h-4 animate-spin text-white" />
+              <span>Slicing Binary Segments & Sanitizing...</span>
+            </>
+          ) : (
+            <>
+              <Zap className="w-4 h-4 text-cyan-200" />
+              <span>Sanitize & Remove AI Provenance</span>
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+};
