@@ -1,7 +1,7 @@
 import React from 'react';
 import type { CleaningResult, DetectedMetadata } from '../engine/types';
 import { formatBytes } from '../engine/hasher';
-import { Download, CheckCircle2, ShieldCheck, Sparkles, Hash } from 'lucide-react';
+import { Download, CheckCircle2, ShieldCheck, Sparkles, Hash, Camera } from 'lucide-react';
 
 interface VerificationDiffProps {
   originalFile: File;
@@ -45,6 +45,11 @@ export const VerificationDiff: React.FC<VerificationDiffProps> = ({
             <span className="text-cyan-400 font-mono">
               {result.isLossless ? '100% Lossless Slicing' : 'Canvas Re-render'}
             </span>
+            {result.injectedCamera && (
+              <span className="text-indigo-400 font-mono">
+                {' '}· Injected: {result.injectedCamera}
+              </span>
+            )}
             .
           </p>
         </div>
@@ -75,16 +80,17 @@ export const VerificationDiff: React.FC<VerificationDiffProps> = ({
           </span>
         </div>
         <div className="bg-[#0b101c] border border-slate-800 rounded-xl p-2.5 sm:p-3">
+          <span className="text-[10px] sm:text-[11px] text-slate-400 block mb-1">Hardware Signature</span>
+          <span className="text-xs sm:text-sm font-bold font-mono text-indigo-400 flex items-center gap-1">
+            <Camera className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            {result.injectedCamera ? 'Injected' : 'Intact'}
+          </span>
+        </div>
+        <div className="bg-[#0b101c] border border-slate-800 rounded-xl p-2.5 sm:p-3">
           <span className="text-[10px] sm:text-[11px] text-slate-400 block mb-1">Pixel Integrity</span>
           <span className="text-xs sm:text-sm font-bold font-mono text-cyan-400 flex items-center gap-1">
             <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
             {result.isLossless ? 'Untouched' : 'Preserved'}
-          </span>
-        </div>
-        <div className="bg-[#0b101c] border border-slate-800 rounded-xl p-2.5 sm:p-3">
-          <span className="text-[10px] sm:text-[11px] text-slate-400 block mb-1">Size Reduction</span>
-          <span className="text-xs sm:text-sm font-bold font-mono text-slate-200">
-            -{formatBytes(result.sizeReductionBytes)}
           </span>
         </div>
         <div className="bg-[#0b101c] border border-slate-800 rounded-xl p-2.5 sm:p-3">
@@ -156,7 +162,7 @@ export const VerificationDiff: React.FC<VerificationDiffProps> = ({
                 className="max-h-full max-w-full object-contain"
               />
               <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-emerald-950/80 backdrop-blur-md text-[9px] sm:text-[10px] font-mono text-emerald-300 border border-emerald-500/40">
-                100% Provenance Free
+                {result.injectedCamera ? `Shot on ${result.injectedCamera}` : '100% Provenance Free'}
               </div>
             </div>
             <div className="mt-3 space-y-1 text-[11px] sm:text-xs text-slate-400 font-mono">
@@ -165,9 +171,9 @@ export const VerificationDiff: React.FC<VerificationDiffProps> = ({
                 <span className="text-slate-200">{originalMetadata.format} (Cleaned)</span>
               </div>
               <div className="flex items-center justify-between">
-                <span>Dimensions:</span>
-                <span className="text-slate-200">
-                  {originalMetadata.dimensions.width}×{originalMetadata.dimensions.height}
+                <span>Hardware:</span>
+                <span className="text-indigo-400 truncate max-w-[150px] sm:max-w-[200px]">
+                  {result.injectedCamera || 'Cleaned'}
                 </span>
               </div>
               <div className="flex items-center justify-between truncate" title={result.cleanedSha256}>
@@ -202,7 +208,7 @@ export const VerificationDiff: React.FC<VerificationDiffProps> = ({
           </div>
           <div>
             <span className="text-emerald-400 font-semibold block mb-1.5 flex items-center gap-1.5">
-              <span>✓</span> Preserved Segments ({result.preservedSegments.length})
+              <span>✓</span> Preserved & Injected Segments ({result.preservedSegments.length})
             </span>
             <ul className="space-y-1 text-slate-400">
               {result.preservedSegments.map((item, idx) => (

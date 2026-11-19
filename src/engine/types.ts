@@ -40,7 +40,7 @@ export interface RawSegment {
   actionOnClean: 'STRIPPED' | 'PRESERVED' | 'OPTIONAL';
 }
 
-export type CleaningMode = 'ANTI_AI' | 'FULL_PRIVACY' | 'CANVAS_REGEN';
+export type CleaningMode = 'ANTI_AI' | 'FULL_PRIVACY' | 'CAMERA_CLOAK' | 'CANVAS_REGEN';
 
 export interface CleaningResult {
   cleanedBlob: Blob;
@@ -55,11 +55,13 @@ export interface CleaningResult {
   cleanedSha256: string;
   removedSegments: string[];
   preservedSegments: string[];
+  injectedCamera?: string;
   verificationStatus: {
     c2paRemoved: boolean;
     aiFlagsRemoved: boolean;
     gpsRemoved: boolean;
     pixelsPreserved: boolean;
+    cameraInjected?: boolean;
   };
 }
 

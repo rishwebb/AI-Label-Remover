@@ -1,5 +1,6 @@
 import type { CleaningMode, CleaningResult, DetectedMetadata } from './types';
 import { computeSha256 } from './hasher';
+import { type CameraProfile, buildCameraExifSegment, CAMERA_PRESETS } from './camera-profiles';
 
 // Helper to check if byte range contains target ASCII
 function subarrayContains(bytes: Uint8Array, start: number, length: number, search: string): boolean {
@@ -18,11 +19,12 @@ function subarrayContains(bytes: Uint8Array, start: number, length: number, sear
   return false;
 }
 
-// Lossless JPEG binary sanitizer
+// Lossless JPEG binary sanitizer & optional camera EXIF injector
 function cleanJpegBinary(
   bytes: Uint8Array,
-  mode: CleaningMode
-): { cleanedBytes: Uint8Array; removed: string[]; preserved: string[] } {
+  mode: CleaningMode,
+  cameraProfile: CameraProfile = CAMERA_PRESETS[0]
+): { cleanedBytes: Uint8Array; removed: string[]; preserved: string[]; injected?: string } {
   const removed: string[] = [];
   const preserved: string[] = [];
   const chunks: Uint8Array[] = [];
@@ -30,6 +32,15 @@ function cleanJpegBinary(
   // Always keep SOI marker (0xFFD8)
   chunks.push(bytes.subarray(0, 2));
   preserved.push('SOI (Start of Image)');
+
+  // If in CAMERA_CLOAK mode, inject genuine camera hardware EXIF right after SOI!
+  let injected: string | undefined = undefined;
+  if (mode === 'CAMERA_CLOAK') {
+    const cameraExifSegment = buildCameraExifSegment(cameraProfile);
+    chunks.push(cameraExifSegment);
+    injected = `${cameraProfile.name} (EXIF Hardware Data)`;
+    preserved.push(`Injected Hardware Profile: ${cameraProfile.name}`);
+  }
 
   let offset = 2;
   const len = bytes.length;
@@ -44,7 +55,6 @@ function cleanJpegBinary(
     }
 
     if (bytes[offset] !== 0xFF) {
-      // Stray byte or corrupted segment, push and move
       chunks.push(bytes.subarray(offset, offset + 1));
       offset++;
       continue;
@@ -76,7 +86,7 @@ function cleanJpegBinary(
     let shouldStrip = false;
     let label = `Segment 0xFF${marker.toString(16).toUpperCase()}`;
 
-    // 0xFFEB: APP11 (C2PA / JUMBF) -> Always strip in ANTI_AI and FULL_PRIVACY
+    // 0xFFEB: APP11 (C2PA / JUMBF) -> Always strip in all cleaning modes
     if (marker === 0xEB) {
       label = 'APP11 (C2PA Manifest)';
       shouldStrip = true;
@@ -84,13 +94,12 @@ function cleanJpegBinary(
     // 0xFFE1: APP1 (EXIF / XMP)
     else if (marker === 0xE1) {
       const isExif = payload[0] === 0x45 && payload[1] === 0x78 && payload[2] === 0x69 && payload[3] === 0x66;
-      if (mode === 'FULL_PRIVACY') {
-        label = isExif ? 'APP1 (EXIF & GPS)' : 'APP1 (XMP Metadata)';
+      if (mode === 'FULL_PRIVACY' || mode === 'CAMERA_CLOAK') {
+        // Strip previous EXIF/XMP because we are replacing with camera profile or wiping
+        label = isExif ? 'APP1 (Original EXIF / Camera)' : 'APP1 (XMP Metadata)';
         shouldStrip = true;
       } else if (mode === 'ANTI_AI') {
-        // In ANTI_AI: Strip if it's XMP containing AI markers or C2PA
         if (!isExif) {
-          // XMP
           const hasAi = subarrayContains(bytes, offset + 2, segmentLength - 2, 'trainedAlgorithmicMedia') ||
                         subarrayContains(bytes, offset + 2, segmentLength - 2, 'c2pa') ||
                         subarrayContains(bytes, offset + 2, segmentLength - 2, 'DALL') ||
@@ -109,14 +118,14 @@ function cleanJpegBinary(
     // 0xFFED: APP13 (Photoshop IPTC)
     else if (marker === 0xED) {
       label = 'APP13 (Photoshop IPTC)';
-      if (mode === 'FULL_PRIVACY') {
+      if (mode === 'FULL_PRIVACY' || mode === 'CAMERA_CLOAK') {
         shouldStrip = true;
       }
     }
     // 0xFFFE: COM (Comment)
     else if (marker === 0xFE) {
       label = 'COM (Comments)';
-      if (mode === 'FULL_PRIVACY') {
+      if (mode === 'FULL_PRIVACY' || mode === 'CAMERA_CLOAK') {
         shouldStrip = true;
       }
     }
@@ -158,7 +167,7 @@ function cleanJpegBinary(
     pos += chunk.length;
   }
 
-  return { cleanedBytes: result, removed, preserved };
+  return { cleanedBytes: result, removed, preserved, injected };
 }
 
 // Lossless PNG binary sanitizer
@@ -189,11 +198,10 @@ function cleanPngBinary(
       shouldStrip = true;
       removed.push(`C2PA Provenance (${chunkType})`);
     } else if (chunkType === 'tEXt' || chunkType === 'zTXt' || chunkType === 'iTXt') {
-      if (mode === 'FULL_PRIVACY') {
+      if (mode === 'FULL_PRIVACY' || mode === 'CAMERA_CLOAK') {
         shouldStrip = true;
         removed.push(`Metadata Text (${chunkType})`);
       } else {
-        // ANTI_AI mode: check if contains AI keywords
         const isAi = subarrayContains(bytes, offset + 8, chunkLength, 'c2pa') ||
                      subarrayContains(bytes, offset + 8, chunkLength, 'trainedAlgorithmicMedia') ||
                      subarrayContains(bytes, offset + 8, chunkLength, 'DALL') ||
@@ -214,7 +222,6 @@ function cleanPngBinary(
         preserved.push('EXIF Chunk (eXIf)');
       }
     } else {
-      // Core image chunks: IHDR, PLTE, IDAT, IEND, color profiles (sRGB, iCCP, gAMA)
       preserved.push(`Image Data / Profile (${chunkType})`);
     }
 
@@ -274,7 +281,7 @@ async function cleanViaCanvas(file: File): Promise<{ blob: Blob; removed: string
           }
         },
         mimeType,
-        0.98 // High quality JPEG/PNG
+        0.98
       );
     };
     img.onerror = () => {
@@ -288,7 +295,8 @@ async function cleanViaCanvas(file: File): Promise<{ blob: Blob; removed: string
 export async function cleanImage(
   file: File,
   metadata: DetectedMetadata,
-  mode: CleaningMode = 'ANTI_AI'
+  mode: CleaningMode = 'ANTI_AI',
+  cameraProfile: CameraProfile = CAMERA_PRESETS[0]
 ): Promise<CleaningResult> {
   const startTime = performance.now();
   const originalBuffer = await file.arrayBuffer();
@@ -297,30 +305,29 @@ export async function cleanImage(
   let cleanedBlob: Blob;
   let removedSegments: string[] = [];
   let preservedSegments: string[] = [];
+  let injectedCamera: string | undefined = undefined;
   let isLossless = true;
 
   if (mode === 'CANVAS_REGEN' || metadata.format === 'OTHER') {
-    // Canvas Re-encode mode
     const canvasResult = await cleanViaCanvas(file);
     cleanedBlob = canvasResult.blob;
     removedSegments = canvasResult.removed;
     preservedSegments = canvasResult.preserved;
-    isLossless = false; // Pixel re-encoding
+    isLossless = false;
   } else {
-    // Lossless Binary Slicing
     const bytes = new Uint8Array(originalBuffer);
     if (metadata.format === 'JPEG') {
-      const { cleanedBytes, removed, preserved } = cleanJpegBinary(bytes, mode);
+      const { cleanedBytes, removed, preserved, injected } = cleanJpegBinary(bytes, mode, cameraProfile);
       cleanedBlob = new Blob([cleanedBytes.buffer.slice(0, cleanedBytes.byteLength) as ArrayBuffer], { type: 'image/jpeg' });
       removedSegments = removed;
       preservedSegments = preserved;
+      injectedCamera = injected;
     } else if (metadata.format === 'PNG') {
       const { cleanedBytes, removed, preserved } = cleanPngBinary(bytes, mode);
       cleanedBlob = new Blob([cleanedBytes.buffer.slice(0, cleanedBytes.byteLength) as ArrayBuffer], { type: 'image/png' });
       removedSegments = removed;
       preservedSegments = preserved;
     } else {
-      // WebP or others: use canvas engine
       const canvasResult = await cleanViaCanvas(file);
       cleanedBlob = canvasResult.blob;
       removedSegments = canvasResult.removed;
@@ -352,11 +359,13 @@ export async function cleanImage(
     cleanedSha256,
     removedSegments,
     preservedSegments,
+    injectedCamera,
     verificationStatus: {
       c2paRemoved: true,
       aiFlagsRemoved: true,
       gpsRemoved: mode === 'FULL_PRIVACY' || mode === 'CANVAS_REGEN',
-      pixelsPreserved: isLossless
+      pixelsPreserved: isLossless,
+      cameraInjected: Boolean(injectedCamera)
     }
   };
 }

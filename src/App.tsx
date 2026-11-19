@@ -7,6 +7,7 @@ import { VerificationDiff } from './components/VerificationDiff';
 import { BatchStudio } from './components/BatchStudio';
 import { ExplainAiModal } from './components/ExplainAiModal';
 import type { DetectedMetadata, CleaningMode, CleaningResult } from './engine/types';
+import { type CameraProfile, CAMERA_PRESETS } from './engine/camera-profiles';
 import { inspectImage } from './engine/binary-inspector';
 import { cleanImage } from './engine/binary-cleaner';
 import { createSampleAiImage } from './engine/sample-generator';
@@ -25,6 +26,7 @@ export default function App() {
   const [currentMetadata, setCurrentMetadata] = useState<DetectedMetadata | null>(null);
   const [cleaningResult, setCleaningResult] = useState<CleaningResult | null>(null);
   const [selectedMode, setSelectedMode] = useState<CleaningMode>('ANTI_AI');
+  const [selectedCamera, setSelectedCamera] = useState<CameraProfile>(CAMERA_PRESETS[0]);
   const [isInspecting, setIsInspecting] = useState(false);
   const [isCleaning, setIsCleaning] = useState(false);
   const [isExplainOpen, setIsExplainOpen] = useState(false);
@@ -73,7 +75,7 @@ export default function App() {
     setIsCleaning(true);
 
     try {
-      const result = await cleanImage(currentFile, currentMetadata, selectedMode);
+      const result = await cleanImage(currentFile, currentMetadata, selectedMode, selectedCamera);
       setCleaningResult(result);
     } catch (err) {
       console.error('Cleaning failed:', err);
@@ -114,7 +116,7 @@ export default function App() {
               </span>
             </h1>
             <p className="text-xs sm:text-sm md:text-base text-slate-400 max-w-2xl mx-auto leading-relaxed">
-              When you post ChatGPT or DALL·E 3 images to Instagram, hidden <strong>C2PA APP11 manifests</strong> and <strong>IPTC generative tags</strong> automatically trigger the AI label. TRACELESS performs surgical, lossless binary slicing in your browser to remove these tags in milliseconds.
+              When you post ChatGPT or DALL·E 3 images to Instagram, hidden <strong>C2PA APP11 manifests</strong> and <strong>IPTC generative tags</strong> automatically trigger the AI label. TRACELESS performs surgical, lossless binary slicing in your browser to remove these tags or cloak with authentic camera hardware EXIF.
             </p>
           </div>
         )}
@@ -142,12 +144,12 @@ export default function App() {
                   </div>
 
                   <div className="bg-[#0f1523] border border-slate-800 rounded-xl p-3.5 sm:p-4">
-                    <div className="p-2 w-fit rounded-lg bg-emerald-950 text-emerald-400 border border-emerald-800/60 mb-2 sm:mb-3">
+                    <div className="p-2 w-fit rounded-lg bg-indigo-950 text-indigo-400 border border-indigo-800/60 mb-2 sm:mb-3">
                       <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
                     </div>
-                    <h4 className="font-semibold text-xs sm:text-sm text-white mb-1">100% Lossless Quality</h4>
+                    <h4 className="font-semibold text-xs sm:text-sm text-white mb-1">Camera Cloak & Lossless</h4>
                     <p className="text-[11px] sm:text-xs text-slate-400 leading-relaxed">
-                      Pixel entropy streams are preserved bit-for-bit without lossy re-encoding or compression.
+                      Inject genuine camera hardware EXIF or sanitize while preserving 100% of pixel scans.
                     </p>
                   </div>
 
@@ -220,6 +222,8 @@ export default function App() {
                         <CleaningControls
                           selectedMode={selectedMode}
                           setSelectedMode={setSelectedMode}
+                          selectedCamera={selectedCamera}
+                          setSelectedCamera={setSelectedCamera}
                           onClean={handleClean}
                           isCleaning={isCleaning}
                           disabled={isInspecting}

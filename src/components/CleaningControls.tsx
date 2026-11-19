@@ -1,10 +1,13 @@
 import React from 'react';
 import type { CleaningMode } from '../engine/types';
-import { Sparkles, Shield, RefreshCw, Zap } from 'lucide-react';
+import { type CameraProfile, CAMERA_PRESETS } from '../engine/camera-profiles';
+import { Sparkles, Shield, RefreshCw, Zap, Camera } from 'lucide-react';
 
 interface CleaningControlsProps {
   selectedMode: CleaningMode;
   setSelectedMode: (mode: CleaningMode) => void;
+  selectedCamera: CameraProfile;
+  setSelectedCamera: (cam: CameraProfile) => void;
   onClean: () => void;
   isCleaning: boolean;
   disabled: boolean;
@@ -13,6 +16,8 @@ interface CleaningControlsProps {
 export const CleaningControls: React.FC<CleaningControlsProps> = ({
   selectedMode,
   setSelectedMode,
+  selectedCamera,
+  setSelectedCamera,
   onClean,
   isCleaning,
   disabled
@@ -32,6 +37,14 @@ export const CleaningControls: React.FC<CleaningControlsProps> = ({
       description: 'Slices out C2PA JUMBF (APP11) manifests and IPTC generative AI markers. Keeps camera profiles and orientation losslessly.',
       icon: <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400" />,
       tagClass: 'bg-cyan-950 text-cyan-300 border-cyan-800'
+    },
+    {
+      id: 'CAMERA_CLOAK',
+      title: 'Camera Metadata Cloak',
+      badge: 'Hardware Injection',
+      description: 'Purges C2PA/AI flags and injects genuine physical camera EXIF (Make, Model, Lens, ISO, Aperture, Shutter).',
+      icon: <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400" />,
+      tagClass: 'bg-indigo-950 text-indigo-300 border-indigo-800'
     },
     {
       id: 'FULL_PRIVACY',
@@ -58,12 +71,12 @@ export const CleaningControls: React.FC<CleaningControlsProps> = ({
           Step 2: Choose Sanitization Profile
         </h3>
         <p className="text-[11px] sm:text-xs text-slate-400 mt-1">
-          Select how aggressively you want to strip metadata from the image.
+          Select how you want to handle metadata or inject authentic camera hardware EXIF.
         </p>
       </div>
 
       {/* Mode Selection Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
         {modes.map((mode) => {
           const isSelected = selectedMode === mode.id;
           return (
@@ -110,6 +123,50 @@ export const CleaningControls: React.FC<CleaningControlsProps> = ({
         })}
       </div>
 
+      {/* Camera Profile Selection Drawer (Appears when CAMERA_CLOAK is active) */}
+      {selectedMode === 'CAMERA_CLOAK' && (
+        <div className="bg-[#0b101c] border border-indigo-500/40 rounded-xl p-4 space-y-3 animate-in fade-in duration-150">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-mono text-indigo-300 uppercase flex items-center gap-1.5">
+              <Camera className="w-4 h-4 text-indigo-400" />
+              Select Camera Hardware Signature to Inject
+            </span>
+            <span className="text-[10px] font-mono text-slate-400">
+              ISO, Aperture & Shutter will be generated
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+            {CAMERA_PRESETS.map((cam) => {
+              const isCamSelected = selectedCamera.id === cam.id;
+              return (
+                <button
+                  key={cam.id}
+                  type="button"
+                  onClick={() => setSelectedCamera(cam)}
+                  className={`p-3 rounded-lg border text-left transition-all ${
+                    isCamSelected
+                      ? 'border-indigo-400 bg-indigo-950/40 ring-1 ring-indigo-400/40 text-white'
+                      : 'border-slate-800 bg-[#0e1422] text-slate-300 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold">{cam.name}</span>
+                    {isCamSelected && <span className="text-[9px] font-mono text-indigo-300">Selected</span>}
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-1 font-mono truncate">
+                    {cam.lensModel}
+                  </div>
+                  <div className="text-[9px] text-indigo-300/80 mt-1 font-mono">
+                    f/{cam.fNumber[0] / cam.fNumber[1]} · ISO {cam.iso} · 1/{cam.exposureTime[1]}s
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Action Button */}
       <div className="pt-1 sm:pt-2">
         <button
@@ -118,18 +175,33 @@ export const CleaningControls: React.FC<CleaningControlsProps> = ({
           className={`w-full py-3 sm:py-3.5 px-4 sm:px-6 rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-lg active:scale-[0.99] ${
             disabled || isCleaning
               ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+              : selectedMode === 'CAMERA_CLOAK'
+              ? 'bg-gradient-to-r from-indigo-500 hover:from-indigo-400 to-purple-600 hover:to-purple-500 text-white shadow-indigo-500/20'
               : 'bg-gradient-to-r from-cyan-500 hover:from-cyan-400 to-indigo-600 hover:to-indigo-500 text-white shadow-cyan-500/20 hover:shadow-cyan-500/30 ring-1 ring-cyan-300/30'
           }`}
         >
           {isCleaning ? (
             <>
               <RefreshCw className="w-4 h-4 animate-spin text-white" />
-              <span>Slicing Binary Segments & Sanitizing...</span>
+              <span>
+                {selectedMode === 'CAMERA_CLOAK'
+                  ? 'Injecting Camera Hardware Profile & Slicing...'
+                  : 'Slicing Binary Segments & Sanitizing...'}
+              </span>
             </>
           ) : (
             <>
-              <Zap className="w-4 h-4 text-cyan-200" />
-              <span>Sanitize & Remove AI Provenance</span>
+              {selectedMode === 'CAMERA_CLOAK' ? (
+                <>
+                  <Camera className="w-4 h-4 text-indigo-200" />
+                  <span>Sanitize & Inject "{selectedCamera.name}" Data</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4 text-cyan-200" />
+                  <span>Sanitize & Remove AI Provenance</span>
+                </>
+              )}
             </>
           )}
         </button>
