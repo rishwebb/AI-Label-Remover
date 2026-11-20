@@ -5,10 +5,10 @@ export interface CameraProfile {
   model: string;
   software: string;
   lensModel: string;
-  fNumber: [number, number];       // numerator, denominator (e.g. [178, 100] for f/1.78)
-  exposureTime: [number, number];  // e.g. [1, 125] for 1/125s
+  fNumber: [number, number];
+  exposureTime: [number, number];
   iso: number;
-  focalLength: [number, number];   // e.g. [240, 10] for 24mm
+  focalLength: [number, number];
   focalLengthIn35mm: number;
 }
 
@@ -80,15 +80,9 @@ export const CAMERA_PRESETS: CameraProfile[] = [
   }
 ];
 
-// Generates an authentic DCIM camera filename matching the camera brand or defaulting to system camera format
-export function generateCameraFilename(cameraName?: string, originalFileName?: string, forceOriginal = false): string {
+// Generates an authentic DCIM camera roll filename (never contains AI prompt names, _cleaned, or _traceless)
+export function generateCameraFilename(cameraName?: string): string {
   const rand4 = Math.floor(1000 + Math.random() * 9000);
-
-  if (forceOriginal && originalFileName) {
-    const ext = originalFileName.split('.').pop() || 'jpg';
-    const baseName = originalFileName.replace(/\.[^/.]+$/, '');
-    return `${baseName}_cleaned.${ext}`;
-  }
 
   if (cameraName) {
     const lower = cameraName.toLowerCase();
@@ -99,25 +93,18 @@ export function generateCameraFilename(cameraName?: string, originalFileName?: s
       const pad = (n: number) => n.toString().padStart(2, '0');
       return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.jpg`;
     }
-    // Apple / Canon / Mobile camera standard
-    return `IMG_${rand4}.JPG`;
   }
 
-  // Default for all photos: authentic camera system filename (IMG_XXXX.JPG)
+  // Universal legitimate camera roll naming standard (Apple / Canon / DSLR)
   return `IMG_${rand4}.JPG`;
 }
 
-// Helper to format date in EXIF format: "YYYY:MM:DD HH:MM:SS"
 function getExifDate(): string {
   const d = new Date();
   const pad = (n: number) => n.toString().padStart(2, '0');
   return `${d.getFullYear()}:${pad(d.getMonth() + 1)}:${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-/**
- * Builds a valid, binary-compliant APP1 (0xFFE1) EXIF segment containing
- * legitimate hardware camera tags (Make, Model, Lens, ISO, Shutter, Aperture).
- */
 export function buildCameraExifSegment(profile: CameraProfile): Uint8Array {
   const dateStr = getExifDate();
 
@@ -125,7 +112,6 @@ export function buildCameraExifSegment(profile: CameraProfile): Uint8Array {
   const view = new DataView(buffer);
   let pos = 0;
 
-  // 1. "Exif\0\0" Header
   view.setUint8(pos++, 0x45); // E
   view.setUint8(pos++, 0x78); // x
   view.setUint8(pos++, 0x69); // i
@@ -135,25 +121,17 @@ export function buildCameraExifSegment(profile: CameraProfile): Uint8Array {
 
   const tiffStart = pos;
 
-  // 2. TIFF Header
-  view.setUint16(pos, 0x4949, true); // "II" Little Endian
-  pos += 2;
-  view.setUint16(pos, 42, true);     // Magic 42
-  pos += 2;
-  view.setUint32(pos, 8, true);      // Offset to IFD0
-  pos += 4;
+  view.setUint16(pos, 0x4949, true); pos += 2; // "II"
+  view.setUint16(pos, 42, true); pos += 2;
+  view.setUint32(pos, 8, true); pos += 4;
 
-  // 3. IFD0 Entries
   const ifd0EntryCount = 6;
-  view.setUint16(pos, ifd0EntryCount, true);
-  pos += 2;
+  view.setUint16(pos, ifd0EntryCount, true); pos += 2;
 
   const ifd0EntriesPos = pos;
   pos += ifd0EntryCount * 12;
 
-  // Next IFD Offset (0 = none)
-  view.setUint32(pos, 0, true);
-  pos += 4;
+  view.setUint32(pos, 0, true); pos += 4;
 
   let dataPoolPos = pos;
 
@@ -169,10 +147,8 @@ export function buildCameraExifSegment(profile: CameraProfile): Uint8Array {
 
   function writeRational(num: number, den: number): number {
     const offset = dataPoolPos - tiffStart;
-    view.setUint32(dataPoolPos, num, true);
-    dataPoolPos += 4;
-    view.setUint32(dataPoolPos, den, true);
-    dataPoolPos += 4;
+    view.setUint32(dataPoolPos, num, true); dataPoolPos += 4;
+    view.setUint32(dataPoolPos, den, true); dataPoolPos += 4;
     return offset;
   }
 
@@ -183,14 +159,12 @@ export function buildCameraExifSegment(profile: CameraProfile): Uint8Array {
 
   const subIfdOffset = dataPoolPos - tiffStart;
   const subIfdCount = 7;
-  view.setUint16(dataPoolPos, subIfdCount, true);
-  dataPoolPos += 2;
+  view.setUint16(dataPoolPos, subIfdCount, true); dataPoolPos += 2;
 
   const subIfdEntriesPos = dataPoolPos;
   dataPoolPos += subIfdCount * 12;
 
-  view.setUint32(dataPoolPos, 0, true);
-  dataPoolPos += 4;
+  view.setUint32(dataPoolPos, 0, true); dataPoolPos += 4;
 
   const expTimeOffset = writeRational(profile.exposureTime[0], profile.exposureTime[1]);
   const fNumberOffset = writeRational(profile.fNumber[0], profile.fNumber[1]);

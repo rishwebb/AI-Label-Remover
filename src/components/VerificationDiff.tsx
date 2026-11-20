@@ -17,17 +17,13 @@ export const VerificationDiff: React.FC<VerificationDiffProps> = ({
   result,
   onReset
 }) => {
-  // Default to a legitimate camera system file name (e.g. IMG_4921.JPG or DSC04921.JPG)
+  // Always default to legitimate camera hardware roll filename (e.g. IMG_4821.JPG, DSC04821.JPG)
   const [downloadName, setDownloadName] = useState<string>(() => {
     return generateCameraFilename(result.injectedCamera);
   });
 
   const handleRandomizeCameraName = () => {
     setDownloadName(generateCameraFilename(result.injectedCamera));
-  };
-
-  const handleRevertOriginalName = () => {
-    setDownloadName(generateCameraFilename(undefined, originalFile.name, true));
   };
 
   const downloadCleanedFile = () => {
@@ -84,34 +80,26 @@ export const VerificationDiff: React.FC<VerificationDiffProps> = ({
 
       {/* Save Filename Customizer */}
       <div className="bg-[#0b101c] border border-slate-800 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <Edit3 className="w-4 h-4 text-cyan-400 shrink-0" />
-          <span className="text-xs font-mono text-slate-300 shrink-0">Download File Name:</span>
+          <span className="text-xs font-mono text-slate-300 shrink-0">Camera Roll Filename:</span>
           <input
             type="text"
             value={downloadName}
             onChange={(e) => setDownloadName(e.target.value)}
-            className="bg-slate-900 border border-slate-700 focus:border-cyan-400 text-cyan-300 font-mono text-xs px-2.5 py-1 rounded w-full sm:w-64 outline-none"
+            className="bg-slate-900 border border-slate-700 focus:border-cyan-400 text-cyan-300 font-mono text-xs px-2.5 py-1 rounded w-full sm:w-60 outline-none"
             placeholder="e.g. IMG_4821.JPG"
           />
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {result.injectedCamera && (
-            <button
-              onClick={handleRandomizeCameraName}
-              className="text-[11px] font-mono text-indigo-300 hover:text-indigo-200 bg-indigo-950/40 hover:bg-indigo-900/50 border border-indigo-800/60 px-2.5 py-1 rounded flex items-center gap-1 transition-colors"
-              title="Generate a realistic DCIM sequence name like IMG_4921.JPG"
-            >
-              <RefreshCw className="w-3 h-3" />
-              <span>Camera DCIM Roll</span>
-            </button>
-          )}
           <button
-            onClick={handleRevertOriginalName}
-            className="text-[11px] font-mono text-slate-400 hover:text-slate-200 bg-slate-900 hover:bg-slate-800 border border-slate-800 px-2.5 py-1 rounded transition-colors"
+            onClick={handleRandomizeCameraName}
+            className="text-[11px] font-mono text-indigo-300 hover:text-indigo-200 bg-indigo-950/40 hover:bg-indigo-900/50 border border-indigo-800/60 px-2.5 py-1 rounded flex items-center gap-1.5 transition-colors"
+            title="Generate another authentic DCIM camera sequence number"
           >
-            Use Original Name
+            <RefreshCw className="w-3 h-3" />
+            <span>New Camera Sequence ID</span>
           </button>
         </div>
       </div>
