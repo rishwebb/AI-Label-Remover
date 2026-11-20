@@ -94,9 +94,10 @@ export const BatchStudio: React.FC<BatchStudioProps> = () => {
     setIsZipping(true);
     const zip = new JSZip();
 
-    for (const item of doneItems) {
+    for (let idx = 0; idx < doneItems.length; idx++) {
+      const item = doneItems[idx];
       if (!item.result) continue;
-      const cleanFileName = generateCameraFilename(item.result.injectedCamera);
+      const cleanFileName = generateCameraFilename(item.result.injectedCamera, idx);
 
       const buffer = await item.result.cleanedBlob.arrayBuffer();
       zip.file(cleanFileName, buffer);
@@ -106,7 +107,7 @@ export const BatchStudio: React.FC<BatchStudioProps> = () => {
     const downloadUrl = URL.createObjectURL(zipBlob);
     const link = document.createElement('a');
     link.href = downloadUrl;
-    link.download = `traceless_batch_${Date.now()}.zip`;
+    link.download = `Photos_${Date.now()}.zip`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

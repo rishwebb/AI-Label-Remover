@@ -1,6 +1,6 @@
 import React from 'react';
 import type { CleaningMode } from '../engine/types';
-import { type CameraProfile, CAMERA_PRESETS } from '../engine/camera-profiles';
+import { type CameraProfile, CAMERA_PRESETS, generateCameraFilename } from '../engine/camera-profiles';
 import { Sparkles, Shield, RefreshCw, Zap, Camera } from 'lucide-react';
 
 interface CleaningControlsProps {
@@ -159,6 +159,10 @@ export const CleaningControls: React.FC<CleaningControlsProps> = ({
                   </div>
                   <div className="text-[9px] text-indigo-300/80 mt-1 font-mono">
                     f/{cam.fNumber[0] / cam.fNumber[1]} · ISO {cam.iso} · 1/{cam.exposureTime[1]}s
+                  </div>
+                  <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-800/80 text-[9px] font-mono">
+                    <span className="text-slate-400">Roll Filename:</span>
+                    <span className="text-cyan-300">{generateCameraFilename(cam.name)}</span>
                   </div>
                 </button>
               );

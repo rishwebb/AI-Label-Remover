@@ -81,22 +81,42 @@ export const CAMERA_PRESETS: CameraProfile[] = [
 ];
 
 // Generates an authentic DCIM camera roll filename (never contains AI prompt names, _cleaned, or _traceless)
-export function generateCameraFilename(cameraName?: string): string {
+export function generateCameraFilename(cameraName?: string, indexOffset = 0): string {
   const rand4 = Math.floor(1000 + Math.random() * 9000);
 
   if (cameraName) {
     const lower = cameraName.toLowerCase();
-    if (lower.includes('sony')) return `DSC0${rand4}.JPG`;
-    if (lower.includes('fuji')) return `DSCF${rand4}.JPG`;
-    if (lower.includes('samsung')) {
-      const d = new Date();
+    if (lower.includes('sony') || lower.includes('ilce')) {
+      const num = String((rand4 + indexOffset) % 10000).padStart(4, '0');
+      return `DSC0${num}.JPG`;
+    }
+    if (lower.includes('fuji') || lower.includes('x-t5')) {
+      const num = String((rand4 + indexOffset) % 10000).padStart(4, '0');
+      return `DSCF${num}.JPG`;
+    }
+    if (lower.includes('samsung') || lower.includes('s24') || lower.includes('galaxy') || lower.includes('sm-s9')) {
+      // Samsung Galaxy One UI camera format: YYYYMMDD_HHMMSS.jpg
+      const d = new Date(Date.now() + indexOffset * 1000);
       const pad = (n: number) => n.toString().padStart(2, '0');
       return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.jpg`;
+    }
+    if (lower.includes('nikon')) {
+      const num = String((rand4 + indexOffset) % 10000).padStart(4, '0');
+      return `DSC_${num}.JPG`;
+    }
+    if (lower.includes('canon')) {
+      const num = String((rand4 + indexOffset) % 10000).padStart(4, '0');
+      return `IMG_${num}.JPG`;
+    }
+    if (lower.includes('apple') || lower.includes('iphone')) {
+      const num = String((rand4 + indexOffset) % 10000).padStart(4, '0');
+      return `IMG_${num}.JPG`;
     }
   }
 
   // Universal legitimate camera roll naming standard (Apple / Canon / DSLR)
-  return `IMG_${rand4}.JPG`;
+  const num = String((rand4 + indexOffset) % 10000).padStart(4, '0');
+  return `IMG_${num}.JPG`;
 }
 
 function getExifDate(): string {

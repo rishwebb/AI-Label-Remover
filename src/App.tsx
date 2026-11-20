@@ -236,6 +236,7 @@ export default function App() {
                           originalFile={currentFile}
                           originalMetadata={currentMetadata}
                           result={cleaningResult}
+                          selectedCamera={selectedCamera}
                           onReset={handleReset}
                         />
                       )}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { CleaningResult, DetectedMetadata } from '../engine/types';
-import { generateCameraFilename } from '../engine/camera-profiles';
+import { type CameraProfile, CAMERA_PRESETS, generateCameraFilename } from '../engine/camera-profiles';
 import { formatBytes } from '../engine/hasher';
 import { Download, CheckCircle2, ShieldCheck, Sparkles, Hash, Camera, RefreshCw, Edit3 } from 'lucide-react';
 
@@ -8,6 +8,7 @@ interface VerificationDiffProps {
   originalFile: File;
   originalMetadata: DetectedMetadata;
   result: CleaningResult;
+  selectedCamera?: CameraProfile;
   onReset: () => void;
 }
 
@@ -15,19 +16,42 @@ export const VerificationDiff: React.FC<VerificationDiffProps> = ({
   originalFile,
   originalMetadata,
   result,
+  selectedCamera,
   onReset
 }) => {
-  // Always default to legitimate camera hardware roll filename (e.g. IMG_4821.JPG, DSC04821.JPG)
-  const [downloadName, setDownloadName] = useState<string>(() => {
-    return generateCameraFilename(result.injectedCamera);
+  // Determine active camera format (injected camera > selected camera > detected camera in metadata > default S24)
+  const [activeCameraName, setActiveCameraName] = useState<string>(() => {
+    return (
+      result.injectedCamera ||
+      selectedCamera?.name ||
+      originalMetadata.cameraMake ||
+      originalMetadata.cameraModel ||
+      'Samsung Galaxy S24 Ultra'
+    );
   });
 
+  // Always default to legitimate camera hardware roll filename matching the chosen camera
+  const [downloadName, setDownloadName] = useState<string>(() => {
+    const camName =
+      result.injectedCamera ||
+      selectedCamera?.name ||
+      originalMetadata.cameraMake ||
+      originalMetadata.cameraModel ||
+      'Samsung Galaxy S24 Ultra';
+    return generateCameraFilename(camName);
+  });
+
+  const handleSelectCameraPreset = (cam: CameraProfile) => {
+    setActiveCameraName(cam.name);
+    setDownloadName(generateCameraFilename(cam.name));
+  };
+
   const handleRandomizeCameraName = () => {
-    setDownloadName(generateCameraFilename(result.injectedCamera));
+    setDownloadName(generateCameraFilename(activeCameraName));
   };
 
   const downloadCleanedFile = () => {
-    const finalName = downloadName.trim() || generateCameraFilename(result.injectedCamera);
+    const finalName = downloadName.trim() || generateCameraFilename(activeCameraName);
     const link = document.createElement('a');
     link.href = result.cleanedUrl;
     link.download = finalName;
@@ -78,29 +102,58 @@ export const VerificationDiff: React.FC<VerificationDiffProps> = ({
         </div>
       </div>
 
-      {/* Save Filename Customizer */}
-      <div className="bg-[#0b101c] border border-slate-800 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <Edit3 className="w-4 h-4 text-cyan-400 shrink-0" />
-          <span className="text-xs font-mono text-slate-300 shrink-0">Camera Roll Filename:</span>
-          <input
-            type="text"
-            value={downloadName}
-            onChange={(e) => setDownloadName(e.target.value)}
-            className="bg-slate-900 border border-slate-700 focus:border-cyan-400 text-cyan-300 font-mono text-xs px-2.5 py-1 rounded w-full sm:w-60 outline-none"
-            placeholder="e.g. IMG_4821.JPG"
-          />
+      {/* Save Filename Customizer & Camera Brand Matcher */}
+      <div className="bg-[#0b101c] border border-slate-800 rounded-xl p-3.5 sm:p-4 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <Edit3 className="w-4 h-4 text-cyan-400 shrink-0" />
+            <span className="text-xs font-mono text-slate-300 shrink-0">Camera Roll Filename:</span>
+            <input
+              type="text"
+              value={downloadName}
+              onChange={(e) => setDownloadName(e.target.value)}
+              className="bg-slate-900 border border-slate-700 focus:border-cyan-400 text-cyan-300 font-mono text-xs px-2.5 py-1.5 rounded w-full sm:w-64 outline-none"
+              placeholder="e.g. 20241120_192045.jpg or IMG_4821.JPG"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleRandomizeCameraName}
+              className="text-[11px] font-mono text-indigo-300 hover:text-indigo-200 bg-indigo-950/40 hover:bg-indigo-900/50 border border-indigo-800/60 px-2.5 py-1.5 rounded flex items-center gap-1.5 transition-colors"
+              title="Generate a new sequence number or timestamp for this camera brand"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>New Sequence ID</span>
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={handleRandomizeCameraName}
-            className="text-[11px] font-mono text-indigo-300 hover:text-indigo-200 bg-indigo-950/40 hover:bg-indigo-900/50 border border-indigo-800/60 px-2.5 py-1 rounded flex items-center gap-1.5 transition-colors"
-            title="Generate another authentic DCIM camera sequence number"
-          >
-            <RefreshCw className="w-3 h-3" />
-            <span>New Camera Sequence ID</span>
-          </button>
+        {/* Quick Camera Brand Format Switcher */}
+        <div className="pt-2 border-t border-slate-800/80 flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] font-mono text-slate-400 mr-1 flex items-center gap-1">
+            <Camera className="w-3 h-3 text-slate-500" /> Match Brand:
+          </span>
+          {CAMERA_PRESETS.map((cam) => {
+            const isCurrent =
+              activeCameraName.toLowerCase().includes(cam.make.toLowerCase()) ||
+              activeCameraName.toLowerCase().includes(cam.model.toLowerCase());
+            return (
+              <button
+                key={cam.id}
+                type="button"
+                onClick={() => handleSelectCameraPreset(cam)}
+                className={`text-[10px] font-mono px-2 py-0.5 rounded border transition-all ${
+                  isCurrent
+                    ? 'bg-cyan-950 text-cyan-300 border-cyan-700 ring-1 ring-cyan-500/40 font-semibold'
+                    : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700'
+                }`}
+                title={`Format filename as authentic ${cam.name} DCIM roll`}
+              >
+                {cam.name.replace('Apple ', '').replace('Samsung Galaxy ', 'Samsung ').replace('α', 'A')}
+              </button>
+            );
+          })}
         </div>
       </div>
 
