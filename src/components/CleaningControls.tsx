@@ -1,13 +1,15 @@
 import React from 'react';
-import type { CleaningMode } from '../engine/types';
-import { type CameraProfile, CAMERA_PRESETS, generateCameraFilename } from '../engine/camera-profiles';
-import { Sparkles, Shield, RefreshCw, Zap, Camera } from 'lucide-react';
+import type { CleaningMode, CloakOptions, SensorNoiseLevel, DateOption } from '../engine/types';
+import { type CameraProfile, CAMERA_PRESETS, generateCameraFilename, GPS_PRESETS } from '../engine/camera-profiles';
+import { Sparkles, Shield, RefreshCw, Zap, Camera, MapPin, Calendar, Activity } from 'lucide-react';
 
 interface CleaningControlsProps {
   selectedMode: CleaningMode;
   setSelectedMode: (mode: CleaningMode) => void;
   selectedCamera: CameraProfile;
   setSelectedCamera: (cam: CameraProfile) => void;
+  cloakOptions: CloakOptions;
+  setCloakOptions: React.Dispatch<React.SetStateAction<CloakOptions>>;
   onClean: () => void;
   isCleaning: boolean;
   disabled: boolean;
@@ -18,6 +20,8 @@ export const CleaningControls: React.FC<CleaningControlsProps> = ({
   setSelectedMode,
   selectedCamera,
   setSelectedCamera,
+  cloakOptions,
+  setCloakOptions,
   onClean,
   isCleaning,
   disabled
@@ -125,7 +129,7 @@ export const CleaningControls: React.FC<CleaningControlsProps> = ({
 
       {/* Camera Profile Selection Drawer (Appears when CAMERA_CLOAK is active) */}
       {selectedMode === 'CAMERA_CLOAK' && (
-        <div className="bg-[#0b101c] border border-indigo-500/40 rounded-xl p-4 space-y-3 animate-in fade-in duration-150">
+        <div className="bg-[#0b101c] border border-indigo-500/40 rounded-xl p-4 space-y-4 animate-in fade-in duration-150">
           <div className="flex items-center justify-between">
             <span className="text-xs font-mono text-indigo-300 uppercase flex items-center gap-1.5">
               <Camera className="w-4 h-4 text-indigo-400" />
@@ -168,8 +172,104 @@ export const CleaningControls: React.FC<CleaningControlsProps> = ({
               );
             })}
           </div>
+
+          {/* Date & Geolocation Cloak Options */}
+          <div className="pt-3 border-t border-slate-800/80 grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Timestamp Cloak */}
+            <div className="bg-[#0e1424] border border-slate-800 rounded-lg p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-mono text-slate-300 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+                  Capture Timestamp:
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(
+                  [
+                    { id: 'NOW', label: 'Current' },
+                    { id: 'PAST_24H', label: 'Past 24h' },
+                    { id: 'PAST_7D', label: 'Past 7 Days' }
+                  ] as Array<{ id: DateOption; label: string }>
+                ).map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setCloakOptions((prev) => ({ ...prev, dateOption: opt.id }))}
+                    className={`py-1.5 px-2 text-[10px] font-mono rounded border transition-colors ${
+                      (cloakOptions.dateOption || 'NOW') === opt.id
+                        ? 'bg-cyan-950 text-cyan-300 border-cyan-700 font-semibold'
+                        : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Geolocation Preset Cloak */}
+            <div className="bg-[#0e1424] border border-slate-800 rounded-lg p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-mono text-slate-300 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-indigo-400" />
+                  GPS Camera Roll Coordinates:
+                </span>
+              </div>
+              <select
+                value={cloakOptions.gpsPresetId || 'none'}
+                onChange={(e) => setCloakOptions((prev) => ({ ...prev, gpsPresetId: e.target.value }))}
+                className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-[11px] font-mono px-2.5 py-1.5 rounded outline-none focus:border-indigo-400"
+              >
+                {GPS_PRESETS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
       )}
+
+      {/* Feature 1: Adversarial Sensor Noise Bar */}
+      <div className="bg-[#0b101c] border border-slate-800 rounded-xl p-3.5 sm:p-4 space-y-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+          <span className="text-xs font-mono text-slate-200 flex items-center gap-1.5">
+            <Activity className="w-3.5 h-3.5 text-amber-400" />
+            Adversarial CMOS Sensor Noise (Bypass Computer-Vision AI Detectors)
+          </span>
+          <span className="text-[10px] font-mono text-slate-400">
+            Defeats Hive AI & Sightengine spectral frequency classifiers
+          </span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+          {(
+            [
+              { id: 'NONE', label: 'Off (100% Lossless)', desc: 'Pure bit-for-bit slice' },
+              { id: 'LOW', label: 'Low (0.3% - ISO 100)', desc: 'Subtle sensor grain' },
+              { id: 'MEDIUM', label: 'Medium (0.6% - ISO 400)', desc: 'Breaks diffusion grids' },
+              { id: 'HIGH', label: 'High (1.0% - ISO 1600)', desc: 'Strong anti-AI shield' }
+            ] as Array<{ id: SensorNoiseLevel; label: string; desc: string }>
+          ).map((level) => {
+            const isLevelSelected = (cloakOptions.sensorNoise || 'NONE') === level.id;
+            return (
+              <button
+                key={level.id}
+                type="button"
+                onClick={() => setCloakOptions((prev) => ({ ...prev, sensorNoise: level.id }))}
+                className={`p-2 rounded-lg border text-left transition-all ${
+                  isLevelSelected
+                    ? 'border-amber-500/70 bg-amber-950/30 text-amber-200 ring-1 ring-amber-500/40'
+                    : 'border-slate-800 bg-[#0e1422] text-slate-400 hover:text-slate-300 hover:border-slate-700'
+                }`}
+              >
+                <div className="text-[11px] font-semibold font-mono">{level.label}</div>
+                <div className="text-[9px] text-slate-400 mt-0.5">{level.desc}</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Action Button */}
       <div className="pt-1 sm:pt-2">

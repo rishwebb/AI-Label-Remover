@@ -55,7 +55,7 @@ export const Dropzone: React.FC<DropzoneProps> = ({ onFilesSelected, onLoadSampl
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
           multiple
           className="hidden"
           onChange={handleFileInput}
@@ -69,10 +69,10 @@ export const Dropzone: React.FC<DropzoneProps> = ({ onFilesSelected, onLoadSampl
         </div>
 
         <h3 className="text-base sm:text-xl font-semibold text-white mb-1.5 sm:mb-2">
-          Drop your image here to clean
+          Drop your image here or paste with <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-cyan-300 font-mono text-xs shadow-sm">Ctrl+V</kbd>
         </h3>
         <p className="text-xs sm:text-sm text-slate-400 max-w-md mb-4 sm:mb-6">
-          Tap or drag your AI-generated images (JPEG, PNG, WebP).
+          Tap, drag, or clipboard paste your images (JPEG, PNG, WebP, HEIC).
           <span className="text-cyan-400 font-medium"> Processed 100% locally on your device.</span>
         </p>
 

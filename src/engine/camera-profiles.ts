@@ -80,9 +80,45 @@ export const CAMERA_PRESETS: CameraProfile[] = [
   }
 ];
 
+export interface GpsPreset {
+  id: string;
+  name: string;
+  city: string;
+  lat: number;
+  lng: number;
+  altitude: number;
+}
+
+export const GPS_PRESETS: GpsPreset[] = [
+  { id: 'none', name: 'No GPS (Zero Geolocation Trace)', city: 'None', lat: 0, lng: 0, altitude: 0 },
+  { id: 'nyc', name: 'New York, USA', city: 'New York', lat: 40.7128, lng: -74.0060, altitude: 10 },
+  { id: 'tokyo', name: 'Tokyo, Japan', city: 'Tokyo', lat: 35.6762, lng: 139.6503, altitude: 40 },
+  { id: 'london', name: 'London, UK', city: 'London', lat: 51.5074, lng: -0.1278, altitude: 15 },
+  { id: 'paris', name: 'Paris, France', city: 'Paris', lat: 48.8566, lng: 2.3522, altitude: 35 },
+  { id: 'la', name: 'Los Angeles, USA', city: 'Los Angeles', lat: 34.0522, lng: -118.2437, altitude: 85 }
+];
+
+export function resolveTargetDate(dateOption: string = 'NOW', customDate?: string): Date {
+  const now = Date.now();
+  if (dateOption === 'PAST_24H') {
+    const offset = Math.floor(1 + Math.random() * 22) * 3600 * 1000 + Math.floor(Math.random() * 3600 * 1000);
+    return new Date(now - offset);
+  }
+  if (dateOption === 'PAST_7D') {
+    const offset = Math.floor(1 + Math.random() * 6) * 86400 * 1000 + Math.floor(Math.random() * 86400 * 1000);
+    return new Date(now - offset);
+  }
+  if (dateOption === 'CUSTOM' && customDate) {
+    const d = new Date(customDate);
+    if (!isNaN(d.getTime())) return d;
+  }
+  return new Date();
+}
+
 // Generates an authentic DCIM camera roll filename (never contains AI prompt names, _cleaned, or _traceless)
-export function generateCameraFilename(cameraName?: string, indexOffset = 0): string {
+export function generateCameraFilename(cameraName?: string, indexOffset = 0, targetDate?: Date): string {
   const rand4 = Math.floor(1000 + Math.random() * 9000);
+  const d = targetDate || new Date(Date.now() + indexOffset * 1000);
 
   if (cameraName) {
     const lower = cameraName.toLowerCase();
@@ -96,7 +132,6 @@ export function generateCameraFilename(cameraName?: string, indexOffset = 0): st
     }
     if (lower.includes('samsung') || lower.includes('s24') || lower.includes('galaxy') || lower.includes('sm-s9')) {
       // Samsung Galaxy One UI camera format: YYYYMMDD_HHMMSS.jpg
-      const d = new Date(Date.now() + indexOffset * 1000);
       const pad = (n: number) => n.toString().padStart(2, '0');
       return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.jpg`;
     }
@@ -119,16 +154,22 @@ export function generateCameraFilename(cameraName?: string, indexOffset = 0): st
   return `IMG_${num}.JPG`;
 }
 
-function getExifDate(): string {
-  const d = new Date();
+function formatExifDate(d: Date): string {
   const pad = (n: number) => n.toString().padStart(2, '0');
   return `${d.getFullYear()}:${pad(d.getMonth() + 1)}:${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-export function buildCameraExifSegment(profile: CameraProfile): Uint8Array {
-  const dateStr = getExifDate();
+export function buildCameraExifSegment(
+  profile: CameraProfile,
+  targetDate?: Date,
+  gpsPreset?: GpsPreset
+): Uint8Array {
+  const d = targetDate || new Date();
+  const dateStr = formatExifDate(d);
 
-  const buffer = new ArrayBuffer(2048);
+  const hasGps = Boolean(gpsPreset && gpsPreset.id !== 'none');
+
+  const buffer = new ArrayBuffer(4096);
   const view = new DataView(buffer);
   let pos = 0;
 
@@ -141,17 +182,17 @@ export function buildCameraExifSegment(profile: CameraProfile): Uint8Array {
 
   const tiffStart = pos;
 
-  view.setUint16(pos, 0x4949, true); pos += 2; // "II"
+  view.setUint16(pos, 0x4949, true); pos += 2; // "II" Little Endian
   view.setUint16(pos, 42, true); pos += 2;
   view.setUint32(pos, 8, true); pos += 4;
 
-  const ifd0EntryCount = 6;
+  const ifd0EntryCount = hasGps ? 7 : 6;
   view.setUint16(pos, ifd0EntryCount, true); pos += 2;
 
   const ifd0EntriesPos = pos;
   pos += ifd0EntryCount * 12;
 
-  view.setUint32(pos, 0, true); pos += 4;
+  view.setUint32(pos, 0, true); pos += 4; // Next IFD (0)
 
   let dataPoolPos = pos;
 
@@ -192,6 +233,74 @@ export function buildCameraExifSegment(profile: CameraProfile): Uint8Array {
   const origDateData = writeAscii(dateStr);
   const lensModelData = writeAscii(profile.lensModel);
 
+  // Optional GPS IFD
+  let gpsIfdOffset = 0;
+  if (hasGps && gpsPreset) {
+    gpsIfdOffset = dataPoolPos - tiffStart;
+    const gpsCount = 6;
+    view.setUint16(dataPoolPos, gpsCount, true); dataPoolPos += 2;
+    const gpsEntriesPos = dataPoolPos;
+    dataPoolPos += gpsCount * 12;
+    view.setUint32(dataPoolPos, 0, true); dataPoolPos += 4;
+
+    const latRef = gpsPreset.lat >= 0 ? 'N' : 'S';
+    const lngRef = gpsPreset.lng >= 0 ? 'E' : 'W';
+
+    const absLat = Math.abs(gpsPreset.lat);
+    const latDeg = Math.floor(absLat);
+    const latMinFloat = (absLat - latDeg) * 60;
+    const latMin = Math.floor(latMinFloat);
+    const latSec = Math.round((latMinFloat - latMin) * 60 * 100);
+
+    const absLng = Math.abs(gpsPreset.lng);
+    const lngDeg = Math.floor(absLng);
+    const lngMinFloat = (absLng - lngDeg) * 60;
+    const lngMin = Math.floor(lngMinFloat);
+    const lngSec = Math.round((lngMinFloat - lngMin) * 60 * 100);
+
+    // Write 3 rationals for Lat
+    const latRationalsOffset = dataPoolPos - tiffStart;
+    view.setUint32(dataPoolPos, latDeg, true); dataPoolPos += 4;
+    view.setUint32(dataPoolPos, 1, true); dataPoolPos += 4;
+    view.setUint32(dataPoolPos, latMin, true); dataPoolPos += 4;
+    view.setUint32(dataPoolPos, 1, true); dataPoolPos += 4;
+    view.setUint32(dataPoolPos, latSec, true); dataPoolPos += 4;
+    view.setUint32(dataPoolPos, 100, true); dataPoolPos += 4;
+
+    // Write 3 rationals for Lng
+    const lngRationalsOffset = dataPoolPos - tiffStart;
+    view.setUint32(dataPoolPos, lngDeg, true); dataPoolPos += 4;
+    view.setUint32(dataPoolPos, 1, true); dataPoolPos += 4;
+    view.setUint32(dataPoolPos, lngMin, true); dataPoolPos += 4;
+    view.setUint32(dataPoolPos, 1, true); dataPoolPos += 4;
+    view.setUint32(dataPoolPos, lngSec, true); dataPoolPos += 4;
+    view.setUint32(dataPoolPos, 100, true); dataPoolPos += 4;
+
+    const altOffset = writeRational(Math.round(gpsPreset.altitude || 10), 1);
+
+    let gIdx = gpsEntriesPos;
+    function writeGpsEntry(tag: number, type: number, count: number, valOrOffset: number) {
+      view.setUint16(gIdx, tag, true);
+      view.setUint16(gIdx + 2, type, true);
+      view.setUint32(gIdx + 4, count, true);
+      view.setUint32(gIdx + 8, valOrOffset, true);
+      gIdx += 12;
+    }
+
+    // 0x0000: GPSVersionID (2.3.0.0)
+    writeGpsEntry(0x0000, 1, 4, 0x00000302);
+    // 0x0001: GPSLatitudeRef
+    writeGpsEntry(0x0001, 2, 2, latRef.charCodeAt(0));
+    // 0x0002: GPSLatitude (3 rationals)
+    writeGpsEntry(0x0002, 5, 3, latRationalsOffset);
+    // 0x0003: GPSLongitudeRef
+    writeGpsEntry(0x0003, 2, 2, lngRef.charCodeAt(0));
+    // 0x0004: GPSLongitude (3 rationals)
+    writeGpsEntry(0x0004, 5, 3, lngRationalsOffset);
+    // 0x0006: GPSAltitude
+    writeGpsEntry(0x0006, 5, 1, altOffset);
+  }
+
   let eIdx = ifd0EntriesPos;
   function writeEntry(tag: number, type: number, count: number, valOrOffset: number) {
     view.setUint16(eIdx, tag, true);
@@ -207,6 +316,9 @@ export function buildCameraExifSegment(profile: CameraProfile): Uint8Array {
   writeEntry(0x0131, 2, softwareData.len, softwareData.offset);
   writeEntry(0x0132, 2, dateTimeData.len, dateTimeData.offset);
   writeEntry(0x8769, 4, 1, subIfdOffset);
+  if (hasGps && gpsIfdOffset > 0) {
+    writeEntry(0x8825, 4, 1, gpsIfdOffset); // GPS Info IFD
+  }
 
   eIdx = subIfdEntriesPos;
   writeEntry(0x829A, 5, 1, expTimeOffset);

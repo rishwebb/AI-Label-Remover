@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar';
 import { Dropzone } from './components/Dropzone';
 import { MetadataInspector } from './components/MetadataInspector';
@@ -6,7 +6,7 @@ import { CleaningControls } from './components/CleaningControls';
 import { VerificationDiff } from './components/VerificationDiff';
 import { BatchStudio } from './components/BatchStudio';
 import { ExplainAiModal } from './components/ExplainAiModal';
-import type { DetectedMetadata, CleaningMode, CleaningResult } from './engine/types';
+import type { DetectedMetadata, CleaningMode, CleaningResult, CloakOptions } from './engine/types';
 import { type CameraProfile, CAMERA_PRESETS } from './engine/camera-profiles';
 import { inspectImage } from './engine/binary-inspector';
 import { cleanImage } from './engine/binary-cleaner';
@@ -26,10 +26,46 @@ export default function App() {
   const [currentMetadata, setCurrentMetadata] = useState<DetectedMetadata | null>(null);
   const [cleaningResult, setCleaningResult] = useState<CleaningResult | null>(null);
   const [selectedMode, setSelectedMode] = useState<CleaningMode>('ANTI_AI');
-  const [selectedCamera, setSelectedCamera] = useState<CameraProfile>(CAMERA_PRESETS[0]);
+  const [selectedCamera, setSelectedCamera] = useState<CameraProfile>(CAMERA_PRESETS[4]); // Samsung S24 Ultra
+  const [cloakOptions, setCloakOptions] = useState<CloakOptions>({
+    dateOption: 'NOW',
+    gpsPresetId: 'none',
+    sensorNoise: 'NONE'
+  });
   const [isInspecting, setIsInspecting] = useState(false);
   const [isCleaning, setIsCleaning] = useState(false);
   const [isExplainOpen, setIsExplainOpen] = useState(false);
+
+  // Global clipboard paste listener (Ctrl + V)
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+
+      if (!e.clipboardData) return;
+      const items = e.clipboardData.items;
+      const imageFiles: File[] = [];
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const blob = items[i].getAsFile();
+          if (blob) {
+            const ext = blob.type.split('/')[1] || 'png';
+            const file = new File([blob], `clipboard_image_${Date.now()}.${ext}`, { type: blob.type });
+            imageFiles.push(file);
+          }
+        }
+      }
+
+      if (imageFiles.length > 0) {
+        e.preventDefault();
+        handleFilesSelected(imageFiles);
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [activeTab]);
 
   const handleFilesSelected = async (files: File[]) => {
     if (files.length === 0) return;
@@ -75,7 +111,7 @@ export default function App() {
     setIsCleaning(true);
 
     try {
-      const result = await cleanImage(currentFile, currentMetadata, selectedMode, selectedCamera);
+      const result = await cleanImage(currentFile, currentMetadata, selectedMode, selectedCamera, cloakOptions);
       setCleaningResult(result);
     } catch (err) {
       console.error('Cleaning failed:', err);
@@ -224,6 +260,8 @@ export default function App() {
                           setSelectedMode={setSelectedMode}
                           selectedCamera={selectedCamera}
                           setSelectedCamera={setSelectedCamera}
+                          cloakOptions={cloakOptions}
+                          setCloakOptions={setCloakOptions}
                           onClean={handleClean}
                           isCleaning={isCleaning}
                           disabled={isInspecting}

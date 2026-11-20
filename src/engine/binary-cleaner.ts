@@ -1,6 +1,6 @@
-import type { CleaningMode, CleaningResult, DetectedMetadata } from './types';
+import type { CleaningMode, CleaningResult, DetectedMetadata, CloakOptions, SensorNoiseLevel } from './types';
 import { computeSha256 } from './hasher';
-import { type CameraProfile, buildCameraExifSegment, CAMERA_PRESETS } from './camera-profiles';
+import { type CameraProfile, buildCameraExifSegment, CAMERA_PRESETS, GPS_PRESETS, resolveTargetDate, type GpsPreset } from './camera-profiles';
 
 // Helper to check if byte range contains target ASCII
 function subarrayContains(bytes: Uint8Array, start: number, length: number, search: string): boolean {
@@ -23,8 +23,10 @@ function subarrayContains(bytes: Uint8Array, start: number, length: number, sear
 function cleanJpegBinary(
   bytes: Uint8Array,
   mode: CleaningMode,
-  cameraProfile: CameraProfile = CAMERA_PRESETS[0]
-): { cleanedBytes: Uint8Array; removed: string[]; preserved: string[]; injected?: string } {
+  cameraProfile: CameraProfile = CAMERA_PRESETS[0],
+  targetDate?: Date,
+  gpsPreset?: GpsPreset
+): { cleanedBytes: Uint8Array; removed: string[]; preserved: string[]; injected?: string; injectedLocation?: string } {
   const removed: string[] = [];
   const preserved: string[] = [];
   const chunks: Uint8Array[] = [];
@@ -35,11 +37,16 @@ function cleanJpegBinary(
 
   // If in CAMERA_CLOAK mode, inject genuine camera hardware EXIF right after SOI!
   let injected: string | undefined = undefined;
+  let injectedLocation: string | undefined = undefined;
   if (mode === 'CAMERA_CLOAK') {
-    const cameraExifSegment = buildCameraExifSegment(cameraProfile);
+    const cameraExifSegment = buildCameraExifSegment(cameraProfile, targetDate, gpsPreset);
     chunks.push(cameraExifSegment);
     injected = `${cameraProfile.name} (EXIF Hardware Data)`;
     preserved.push(`Injected Hardware Profile: ${cameraProfile.name}`);
+    if (gpsPreset && gpsPreset.id !== 'none') {
+      injectedLocation = gpsPreset.name;
+      preserved.push(`Injected Geolocation: ${gpsPreset.name}`);
+    }
   }
 
   let offset = 2;
@@ -167,7 +174,7 @@ function cleanJpegBinary(
     pos += chunk.length;
   }
 
-  return { cleanedBytes: result, removed, preserved, injected };
+  return { cleanedBytes: result, removed, preserved, injected, injectedLocation };
 }
 
 // Lossless PNG binary sanitizer
@@ -292,21 +299,127 @@ async function cleanViaCanvas(file: File): Promise<{ blob: Blob; removed: string
   });
 }
 
+// Adversarial Sensor Noise Perturbation (Defeats Computer Vision & Frequency AI Detectors)
+async function applyAdversarialSensorNoise(
+  file: File,
+  noiseLevel: SensorNoiseLevel
+): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) {
+        URL.revokeObjectURL(url);
+        reject(new Error('Canvas context unavailable'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0);
+
+      // Noise amplitudes: LOW ~ 1.5, MEDIUM ~ 3.0, HIGH ~ 5.5
+      const amplitude = noiseLevel === 'LOW' ? 1.5 : noiseLevel === 'MEDIUM' ? 3.0 : 5.5;
+
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imgData.data;
+      const len = data.length;
+
+      for (let i = 0; i < len; i += 4) {
+        const noise = (Math.random() - 0.5) * 2 * amplitude;
+        const chromaNoise = (Math.random() - 0.5) * amplitude * 0.4;
+        data[i] = Math.min(255, Math.max(0, data[i] + noise + chromaNoise));
+        data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + noise));
+        data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + noise - chromaNoise));
+      }
+
+      ctx.putImageData(imgData, 0, 0);
+
+      canvas.toBlob(
+        async (blob) => {
+          URL.revokeObjectURL(url);
+          if (blob) {
+            const buf = await blob.arrayBuffer();
+            resolve(new Uint8Array(buf));
+          } else {
+            reject(new Error('Noise encoding failed'));
+          }
+        },
+        'image/jpeg',
+        0.98
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to load image for noise perturbation'));
+    };
+    img.src = url;
+  });
+}
+
+// Convert WebP / HEIC to clean JPEG buffer for camera cloaking
+async function convertToCleanJpegBuffer(file: File): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        URL.revokeObjectURL(url);
+        reject(new Error('Canvas context unavailable'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob(
+        async (blob) => {
+          URL.revokeObjectURL(url);
+          if (blob) {
+            const buf = await blob.arrayBuffer();
+            resolve(new Uint8Array(buf));
+          } else {
+            reject(new Error('WebP/HEIC conversion failed'));
+          }
+        },
+        'image/jpeg',
+        0.98
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to decode image'));
+    };
+    img.src = url;
+  });
+}
+
 export async function cleanImage(
   file: File,
   metadata: DetectedMetadata,
   mode: CleaningMode = 'ANTI_AI',
-  cameraProfile: CameraProfile = CAMERA_PRESETS[0]
+  cameraProfile: CameraProfile = CAMERA_PRESETS[0],
+  cloakOptions?: CloakOptions
 ): Promise<CleaningResult> {
   const startTime = performance.now();
   const originalBuffer = await file.arrayBuffer();
   const originalSha256 = await computeSha256(originalBuffer);
 
+  const targetDate = resolveTargetDate(cloakOptions?.dateOption, cloakOptions?.customDate);
+  const gpsPreset = cloakOptions?.gpsPresetId
+    ? GPS_PRESETS.find((p) => p.id === cloakOptions.gpsPresetId) || GPS_PRESETS[0]
+    : GPS_PRESETS[0];
+
+  const applyNoise = Boolean(cloakOptions?.sensorNoise && cloakOptions.sensorNoise !== 'NONE');
+
   let cleanedBlob: Blob;
   let removedSegments: string[] = [];
   let preservedSegments: string[] = [];
   let injectedCamera: string | undefined = undefined;
-  let isLossless = true;
+  let injectedLocation: string | undefined = undefined;
+  let isLossless = !applyNoise;
 
   if (mode === 'CANVAS_REGEN' || metadata.format === 'OTHER') {
     const canvasResult = await cleanViaCanvas(file);
@@ -315,16 +428,38 @@ export async function cleanImage(
     preservedSegments = canvasResult.preserved;
     isLossless = false;
   } else {
-    const bytes = new Uint8Array(originalBuffer);
-    if (metadata.format === 'JPEG') {
-      const { cleanedBytes, removed, preserved, injected } = cleanJpegBinary(bytes, mode, cameraProfile);
-      cleanedBlob = new Blob([cleanedBytes.buffer.slice(0, cleanedBytes.byteLength) as ArrayBuffer], { type: 'image/jpeg' });
+    let bytes: Uint8Array;
+    if (applyNoise) {
+      bytes = await applyAdversarialSensorNoise(file, cloakOptions!.sensorNoise!);
+      preservedSegments.push(`Adversarial CMOS Sensor Noise (${cloakOptions!.sensorNoise} Intensity)`);
+    } else if (metadata.format === 'WEBP' || file.type.includes('webp') || file.name.toLowerCase().endsWith('.webp') || file.name.toLowerCase().endsWith('.heic')) {
+      bytes = await convertToCleanJpegBuffer(file);
+      preservedSegments.push('Converted to pristine JPEG container');
+      isLossless = false;
+    } else {
+      bytes = new Uint8Array(originalBuffer);
+    }
+
+    if (metadata.format === 'JPEG' || applyNoise || metadata.format === 'WEBP') {
+      const { cleanedBytes, removed, preserved, injected, injectedLocation: loc } = cleanJpegBinary(
+        bytes,
+        mode,
+        cameraProfile,
+        targetDate,
+        gpsPreset
+      );
+      cleanedBlob = new Blob([cleanedBytes.buffer.slice(0, cleanedBytes.byteLength) as ArrayBuffer], {
+        type: 'image/jpeg'
+      });
       removedSegments = removed;
-      preservedSegments = preserved;
+      preservedSegments = [...preservedSegments, ...preserved];
       injectedCamera = injected;
+      injectedLocation = loc;
     } else if (metadata.format === 'PNG') {
       const { cleanedBytes, removed, preserved } = cleanPngBinary(bytes, mode);
-      cleanedBlob = new Blob([cleanedBytes.buffer.slice(0, cleanedBytes.byteLength) as ArrayBuffer], { type: 'image/png' });
+      cleanedBlob = new Blob([cleanedBytes.buffer.slice(0, cleanedBytes.byteLength) as ArrayBuffer], {
+        type: 'image/png'
+      });
       removedSegments = removed;
       preservedSegments = preserved;
     } else {
@@ -360,10 +495,13 @@ export async function cleanImage(
     removedSegments,
     preservedSegments,
     injectedCamera,
+    injectedDate: targetDate ? targetDate.toISOString() : undefined,
+    injectedLocation,
+    sensorNoiseApplied: applyNoise,
     verificationStatus: {
       c2paRemoved: true,
       aiFlagsRemoved: true,
-      gpsRemoved: mode === 'FULL_PRIVACY' || mode === 'CANVAS_REGEN',
+      gpsRemoved: mode === 'FULL_PRIVACY' || mode === 'CANVAS_REGEN' || gpsPreset.id === 'none',
       pixelsPreserved: isLossless,
       cameraInjected: Boolean(injectedCamera)
     }

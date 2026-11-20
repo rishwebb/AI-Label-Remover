@@ -46,6 +46,24 @@ export interface RawSegment {
 
 export type CleaningMode = 'ANTI_AI' | 'FULL_PRIVACY' | 'CAMERA_CLOAK' | 'CANVAS_REGEN';
 
+export type SensorNoiseLevel = 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH';
+export type DateOption = 'NOW' | 'PAST_24H' | 'PAST_7D' | 'CUSTOM';
+
+export interface GpsPreset {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  altitude: number;
+}
+
+export interface CloakOptions {
+  dateOption?: DateOption;
+  customDate?: string;
+  gpsPresetId?: string;
+  sensorNoise?: SensorNoiseLevel;
+}
+
 export interface CleaningResult {
   cleanedBlob: Blob;
   cleanedUrl: string;
@@ -60,6 +78,9 @@ export interface CleaningResult {
   removedSegments: string[];
   preservedSegments: string[];
   injectedCamera?: string;
+  injectedDate?: string;
+  injectedLocation?: string;
+  sensorNoiseApplied?: boolean;
   verificationStatus: {
     c2paRemoved: boolean;
     aiFlagsRemoved: boolean;
