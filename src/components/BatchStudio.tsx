@@ -96,7 +96,7 @@ export const BatchStudio: React.FC<BatchStudioProps> = () => {
 
     for (const item of doneItems) {
       if (!item.result) continue;
-      const cleanFileName = generateCameraFilename(item.result.injectedCamera, item.file.name);
+      const cleanFileName = generateCameraFilename(item.result.injectedCamera);
 
       const buffer = await item.result.cleanedBlob.arrayBuffer();
       zip.file(cleanFileName, buffer);
@@ -275,7 +275,7 @@ export const BatchStudio: React.FC<BatchStudioProps> = () => {
                       </span>
                       <a
                         href={item.result.cleanedUrl}
-                        download={generateCameraFilename(item.result.injectedCamera, item.file.name)}
+                        download={generateCameraFilename(item.result.injectedCamera)}
                         className="p-1 sm:p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
                         title="Download single"
                       >

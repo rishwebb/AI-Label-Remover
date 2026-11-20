@@ -80,27 +80,30 @@ export const CAMERA_PRESETS: CameraProfile[] = [
   }
 ];
 
-// Generates an authentic DCIM camera filename matching the camera brand
-export function generateCameraFilename(cameraName?: string, originalFileName?: string): string {
+// Generates an authentic DCIM camera filename matching the camera brand or defaulting to system camera format
+export function generateCameraFilename(cameraName?: string, originalFileName?: string, forceOriginal = false): string {
   const rand4 = Math.floor(1000 + Math.random() * 9000);
-  if (!cameraName) {
-    if (originalFileName) {
-      const ext = originalFileName.split('.').pop() || 'jpg';
-      const baseName = originalFileName.replace(/\.[^/.]+$/, '');
-      return `${baseName}_cleaned.${ext}`;
+
+  if (forceOriginal && originalFileName) {
+    const ext = originalFileName.split('.').pop() || 'jpg';
+    const baseName = originalFileName.replace(/\.[^/.]+$/, '');
+    return `${baseName}_cleaned.${ext}`;
+  }
+
+  if (cameraName) {
+    const lower = cameraName.toLowerCase();
+    if (lower.includes('sony')) return `DSC0${rand4}.JPG`;
+    if (lower.includes('fuji')) return `DSCF${rand4}.JPG`;
+    if (lower.includes('samsung')) {
+      const d = new Date();
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.jpg`;
     }
+    // Apple / Canon / Mobile camera standard
     return `IMG_${rand4}.JPG`;
   }
 
-  const lower = cameraName.toLowerCase();
-  if (lower.includes('sony')) return `DSC0${rand4}.JPG`;
-  if (lower.includes('fuji')) return `DSCF${rand4}.JPG`;
-  if (lower.includes('samsung')) {
-    const d = new Date();
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.jpg`;
-  }
-  // Apple iPhone / Canon / Default DCIM format
+  // Default for all photos: authentic camera system filename (IMG_XXXX.JPG)
   return `IMG_${rand4}.JPG`;
 }
 

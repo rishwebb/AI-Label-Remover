@@ -17,23 +17,21 @@ export const VerificationDiff: React.FC<VerificationDiffProps> = ({
   result,
   onReset
 }) => {
-  // Initial filename based on camera preset or cleaned original name
+  // Default to a legitimate camera system file name (e.g. IMG_4921.JPG or DSC04921.JPG)
   const [downloadName, setDownloadName] = useState<string>(() => {
-    return generateCameraFilename(result.injectedCamera, originalFile.name);
+    return generateCameraFilename(result.injectedCamera);
   });
 
   const handleRandomizeCameraName = () => {
-    setDownloadName(generateCameraFilename(result.injectedCamera, originalFile.name));
+    setDownloadName(generateCameraFilename(result.injectedCamera));
   };
 
   const handleRevertOriginalName = () => {
-    const ext = originalFile.name.split('.').pop() || 'jpg';
-    const baseName = originalFile.name.replace(/\.[^/.]+$/, '');
-    setDownloadName(`${baseName}_cleaned.${ext}`);
+    setDownloadName(generateCameraFilename(undefined, originalFile.name, true));
   };
 
   const downloadCleanedFile = () => {
-    const finalName = downloadName.trim() || `IMG_${Math.floor(1000 + Math.random() * 9000)}.JPG`;
+    const finalName = downloadName.trim() || generateCameraFilename(result.injectedCamera);
     const link = document.createElement('a');
     link.href = result.cleanedUrl;
     link.download = finalName;
