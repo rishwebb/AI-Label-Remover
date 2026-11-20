@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { BatchItem, CleaningMode } from '../engine/types';
 import { inspectImage } from '../engine/binary-inspector';
 import { cleanImage } from '../engine/binary-cleaner';
+import { generateCameraFilename } from '../engine/camera-profiles';
 import { formatBytes } from '../engine/hasher';
 import JSZip from 'jszip';
 import {
@@ -95,9 +96,7 @@ export const BatchStudio: React.FC<BatchStudioProps> = () => {
 
     for (const item of doneItems) {
       if (!item.result) continue;
-      const ext = item.file.name.split('.').pop() || 'jpg';
-      const baseName = item.file.name.replace(/\.[^/.]+$/, '');
-      const cleanFileName = `${baseName}_traceless.${ext}`;
+      const cleanFileName = generateCameraFilename(item.result.injectedCamera, item.file.name);
 
       const buffer = await item.result.cleanedBlob.arrayBuffer();
       zip.file(cleanFileName, buffer);
@@ -276,7 +275,7 @@ export const BatchStudio: React.FC<BatchStudioProps> = () => {
                       </span>
                       <a
                         href={item.result.cleanedUrl}
-                        download={`clean_${item.file.name}`}
+                        download={generateCameraFilename(item.result.injectedCamera, item.file.name)}
                         className="p-1 sm:p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
                         title="Download single"
                       >

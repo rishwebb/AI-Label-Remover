@@ -80,6 +80,30 @@ export const CAMERA_PRESETS: CameraProfile[] = [
   }
 ];
 
+// Generates an authentic DCIM camera filename matching the camera brand
+export function generateCameraFilename(cameraName?: string, originalFileName?: string): string {
+  const rand4 = Math.floor(1000 + Math.random() * 9000);
+  if (!cameraName) {
+    if (originalFileName) {
+      const ext = originalFileName.split('.').pop() || 'jpg';
+      const baseName = originalFileName.replace(/\.[^/.]+$/, '');
+      return `${baseName}_cleaned.${ext}`;
+    }
+    return `IMG_${rand4}.JPG`;
+  }
+
+  const lower = cameraName.toLowerCase();
+  if (lower.includes('sony')) return `DSC0${rand4}.JPG`;
+  if (lower.includes('fuji')) return `DSCF${rand4}.JPG`;
+  if (lower.includes('samsung')) {
+    const d = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.jpg`;
+  }
+  // Apple iPhone / Canon / Default DCIM format
+  return `IMG_${rand4}.JPG`;
+}
+
 // Helper to format date in EXIF format: "YYYY:MM:DD HH:MM:SS"
 function getExifDate(): string {
   const d = new Date();
@@ -94,7 +118,6 @@ function getExifDate(): string {
 export function buildCameraExifSegment(profile: CameraProfile): Uint8Array {
   const dateStr = getExifDate();
 
-  // We write in Little Endian (II / 0x4949)
   const buffer = new ArrayBuffer(2048);
   const view = new DataView(buffer);
   let pos = 0;
@@ -114,16 +137,14 @@ export function buildCameraExifSegment(profile: CameraProfile): Uint8Array {
   pos += 2;
   view.setUint16(pos, 42, true);     // Magic 42
   pos += 2;
-  view.setUint32(pos, 8, true);      // Offset to IFD0 (relative to tiffStart)
+  view.setUint32(pos, 8, true);      // Offset to IFD0
   pos += 4;
 
   // 3. IFD0 Entries
-  // Tags: Make (0x010F), Model (0x0110), Orientation (0x0112), Software (0x0131), DateTime (0x0132), ExifOffset (0x8769)
   const ifd0EntryCount = 6;
   view.setUint16(pos, ifd0EntryCount, true);
   pos += 2;
 
-  // Space for IFD0 entries (6 entries * 12 bytes = 72 bytes)
   const ifd0EntriesPos = pos;
   pos += ifd0EntryCount * 12;
 
@@ -131,7 +152,6 @@ export function buildCameraExifSegment(profile: CameraProfile): Uint8Array {
   view.setUint32(pos, 0, true);
   pos += 4;
 
-  // Dynamic data pool starts here (for strings and SubIFD)
   let dataPoolPos = pos;
 
   function writeAscii(str: string): { offset: number; len: number } {
@@ -140,7 +160,6 @@ export function buildCameraExifSegment(profile: CameraProfile): Uint8Array {
     for (let i = 0; i < bytes.length; i++) {
       view.setUint8(dataPoolPos++, bytes[i]);
     }
-    // Pad to word boundary
     if (dataPoolPos % 2 !== 0) view.setUint8(dataPoolPos++, 0);
     return { offset, len: bytes.length };
   }
@@ -154,18 +173,12 @@ export function buildCameraExifSegment(profile: CameraProfile): Uint8Array {
     return offset;
   }
 
-  // Write IFD0 Strings
   const makeData = writeAscii(profile.make);
   const modelData = writeAscii(profile.model);
   const softwareData = writeAscii(profile.software);
   const dateTimeData = writeAscii(dateStr);
 
-  // Write SubIFD (ExifIFD)
   const subIfdOffset = dataPoolPos - tiffStart;
-
-  // SubIFD Entries:
-  // ExposureTime (0x829A), FNumber (0x829D), ISO (0x8827), DateTimeOriginal (0x9003),
-  // FocalLength (0x920A), FocalLengthIn35mm (0xA405), LensModel (0xA434)
   const subIfdCount = 7;
   view.setUint16(dataPoolPos, subIfdCount, true);
   dataPoolPos += 2;
@@ -173,18 +186,15 @@ export function buildCameraExifSegment(profile: CameraProfile): Uint8Array {
   const subIfdEntriesPos = dataPoolPos;
   dataPoolPos += subIfdCount * 12;
 
-  // Next IFD in SubIFD
   view.setUint32(dataPoolPos, 0, true);
   dataPoolPos += 4;
 
-  // SubIFD Data values
   const expTimeOffset = writeRational(profile.exposureTime[0], profile.exposureTime[1]);
   const fNumberOffset = writeRational(profile.fNumber[0], profile.fNumber[1]);
   const focalLengthOffset = writeRational(profile.focalLength[0], profile.focalLength[1]);
   const origDateData = writeAscii(dateStr);
   const lensModelData = writeAscii(profile.lensModel);
 
-  // Now populate IFD0 entries
   let eIdx = ifd0EntriesPos;
   function writeEntry(tag: number, type: number, count: number, valOrOffset: number) {
     view.setUint16(eIdx, tag, true);
@@ -194,27 +204,25 @@ export function buildCameraExifSegment(profile: CameraProfile): Uint8Array {
     eIdx += 12;
   }
 
-  writeEntry(0x010F, 2, makeData.len, makeData.offset);       // Make
-  writeEntry(0x0110, 2, modelData.len, modelData.offset);     // Model
-  writeEntry(0x0112, 3, 1, 1);                                // Orientation = 1 (Normal)
-  writeEntry(0x0131, 2, softwareData.len, softwareData.offset); // Software
-  writeEntry(0x0132, 2, dateTimeData.len, dateTimeData.offset); // DateTime
-  writeEntry(0x8769, 4, 1, subIfdOffset);                     // ExifIFDPointer
+  writeEntry(0x010F, 2, makeData.len, makeData.offset);
+  writeEntry(0x0110, 2, modelData.len, modelData.offset);
+  writeEntry(0x0112, 3, 1, 1);
+  writeEntry(0x0131, 2, softwareData.len, softwareData.offset);
+  writeEntry(0x0132, 2, dateTimeData.len, dateTimeData.offset);
+  writeEntry(0x8769, 4, 1, subIfdOffset);
 
-  // Now populate SubIFD entries
   eIdx = subIfdEntriesPos;
-  writeEntry(0x829A, 5, 1, expTimeOffset);                    // ExposureTime
-  writeEntry(0x829D, 5, 1, fNumberOffset);                    // FNumber
-  writeEntry(0x8827, 3, 1, profile.iso);                      // ISO
-  writeEntry(0x9003, 2, origDateData.len, origDateData.offset); // DateTimeOriginal
-  writeEntry(0x920A, 5, 1, focalLengthOffset);                // FocalLength
-  writeEntry(0xA405, 3, 1, profile.focalLengthIn35mm);        // FocalLengthIn35mmFilm
-  writeEntry(0xA434, 2, lensModelData.len, lensModelData.offset); // LensModel
+  writeEntry(0x829A, 5, 1, expTimeOffset);
+  writeEntry(0x829D, 5, 1, fNumberOffset);
+  writeEntry(0x8827, 3, 1, profile.iso);
+  writeEntry(0x9003, 2, origDateData.len, origDateData.offset);
+  writeEntry(0x920A, 5, 1, focalLengthOffset);
+  writeEntry(0xA405, 3, 1, profile.focalLengthIn35mm);
+  writeEntry(0xA434, 2, lensModelData.len, lensModelData.offset);
 
   const payloadSize = dataPoolPos;
-  const totalSegmentLength = payloadSize + 2; // 2 bytes for segment length itself
+  const totalSegmentLength = payloadSize + 2;
 
-  // Assemble full APP1 segment: [0xFF, 0xE1, len_hi, len_lo, ...payload]
   const segment = new Uint8Array(2 + totalSegmentLength);
   segment[0] = 0xFF;
   segment[1] = 0xE1;

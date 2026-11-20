@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { CleaningResult, DetectedMetadata } from '../engine/types';
+import { generateCameraFilename } from '../engine/camera-profiles';
 import { formatBytes } from '../engine/hasher';
-import { Download, CheckCircle2, ShieldCheck, Sparkles, Hash, Camera } from 'lucide-react';
+import { Download, CheckCircle2, ShieldCheck, Sparkles, Hash, Camera, RefreshCw, Edit3 } from 'lucide-react';
 
 interface VerificationDiffProps {
   originalFile: File;
@@ -16,14 +17,26 @@ export const VerificationDiff: React.FC<VerificationDiffProps> = ({
   result,
   onReset
 }) => {
-  const downloadCleanedFile = () => {
+  // Initial filename based on camera preset or cleaned original name
+  const [downloadName, setDownloadName] = useState<string>(() => {
+    return generateCameraFilename(result.injectedCamera, originalFile.name);
+  });
+
+  const handleRandomizeCameraName = () => {
+    setDownloadName(generateCameraFilename(result.injectedCamera, originalFile.name));
+  };
+
+  const handleRevertOriginalName = () => {
     const ext = originalFile.name.split('.').pop() || 'jpg';
     const baseName = originalFile.name.replace(/\.[^/.]+$/, '');
-    const cleanFileName = `${baseName}_traceless.${ext}`;
+    setDownloadName(`${baseName}_cleaned.${ext}`);
+  };
 
+  const downloadCleanedFile = () => {
+    const finalName = downloadName.trim() || `IMG_${Math.floor(1000 + Math.random() * 9000)}.JPG`;
     const link = document.createElement('a');
     link.href = result.cleanedUrl;
-    link.download = cleanFileName;
+    link.download = finalName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -66,7 +79,41 @@ export const VerificationDiff: React.FC<VerificationDiffProps> = ({
             className="flex-2 sm:flex-none px-4 py-2 text-xs font-semibold rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 flex items-center justify-center gap-1.5 transition-all shadow-md shadow-cyan-500/20"
           >
             <Download className="w-4 h-4 shrink-0" />
-            <span>Download Clean Image</span>
+            <span>Download Image</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Save Filename Customizer */}
+      <div className="bg-[#0b101c] border border-slate-800 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <Edit3 className="w-4 h-4 text-cyan-400 shrink-0" />
+          <span className="text-xs font-mono text-slate-300 shrink-0">Download File Name:</span>
+          <input
+            type="text"
+            value={downloadName}
+            onChange={(e) => setDownloadName(e.target.value)}
+            className="bg-slate-900 border border-slate-700 focus:border-cyan-400 text-cyan-300 font-mono text-xs px-2.5 py-1 rounded w-full sm:w-64 outline-none"
+            placeholder="e.g. IMG_4821.JPG"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {result.injectedCamera && (
+            <button
+              onClick={handleRandomizeCameraName}
+              className="text-[11px] font-mono text-indigo-300 hover:text-indigo-200 bg-indigo-950/40 hover:bg-indigo-900/50 border border-indigo-800/60 px-2.5 py-1 rounded flex items-center gap-1 transition-colors"
+              title="Generate a realistic DCIM sequence name like IMG_4921.JPG"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Camera DCIM Roll</span>
+            </button>
+          )}
+          <button
+            onClick={handleRevertOriginalName}
+            className="text-[11px] font-mono text-slate-400 hover:text-slate-200 bg-slate-900 hover:bg-slate-800 border border-slate-800 px-2.5 py-1 rounded transition-colors"
+          >
+            Use Original Name
           </button>
         </div>
       </div>
