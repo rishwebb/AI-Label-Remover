@@ -5,13 +5,13 @@ import {
   AlertTriangle,
   CheckCircle2,
   Cpu,
-  MapPin,
   Camera,
   FileCode,
   ShieldCheck,
   ChevronDown,
   ChevronUp,
-  Info
+  Info,
+  Sliders
 } from 'lucide-react';
 
 interface MetadataInspectorProps {
@@ -29,33 +29,54 @@ export const MetadataInspector: React.FC<MetadataInspectorProps> = ({ metadata, 
         className={`rounded-xl p-3.5 sm:p-4 border flex items-start gap-3 sm:gap-4 ${
           metadata.isAiFlagged
             ? 'bg-rose-950/20 border-rose-800/60 text-rose-200'
+            : metadata.hasCameraData
+            ? 'bg-indigo-950/20 border-indigo-800/60 text-indigo-200'
             : 'bg-emerald-950/20 border-emerald-800/60 text-emerald-200'
         }`}
       >
         <div
           className={`p-2 sm:p-2.5 rounded-lg shrink-0 ${
-            metadata.isAiFlagged ? 'bg-rose-900/40 text-rose-400' : 'bg-emerald-900/40 text-emerald-400'
+            metadata.isAiFlagged
+              ? 'bg-rose-900/40 text-rose-400'
+              : metadata.hasCameraData
+              ? 'bg-indigo-900/40 text-indigo-400'
+              : 'bg-emerald-900/40 text-emerald-400'
           }`}
         >
-          {metadata.isAiFlagged ? <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" /> : <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />}
+          {metadata.isAiFlagged ? (
+            <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />
+          ) : metadata.hasCameraData ? (
+            <Camera className="w-5 h-5 sm:w-6 sm:h-6" />
+          ) : (
+            <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h4 className="font-semibold text-sm sm:text-base text-white">
               {metadata.isAiFlagged
                 ? 'AI Provenance & Badging Triggers Detected'
-                : 'No Generative AI Metadata Found'}
+                : metadata.hasCameraData
+                ? `Camera Signature Detected: ${metadata.cameraMake || ''} ${metadata.cameraModel || ''}`.trim()
+                : 'Clean Image: No AI Provenance or Sensitive Metadata'}
             </h4>
             {metadata.c2paDetected && (
               <span className="text-[9px] sm:text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
                 C2PA Active
               </span>
             )}
+            {metadata.hasCameraData && !metadata.isAiFlagged && (
+              <span className="text-[9px] sm:text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0">
+                Camera Signature Verified
+              </span>
+            )}
           </div>
           <p className="text-[11px] sm:text-xs text-slate-300 mt-1 leading-relaxed">
             {metadata.isAiFlagged
               ? 'This file contains C2PA cryptographic manifests or IPTC algorithmic media assertions. When uploaded to platforms like Instagram, Meta, or TikTok, these specific tags trigger the automated "Made with AI" badge.'
-              : 'This image does not contain standard C2PA manifests or generative AI software markers.'}
+              : metadata.hasCameraData
+              ? `This image carries physical camera hardware EXIF tags (${metadata.cameraModel}). It reads as authentic camera photography to social networks and photo analyzers.`
+              : 'This image does not contain C2PA manifests, generative AI tags, or personal hardware identifiers.'}
           </p>
         </div>
       </div>
@@ -74,7 +95,7 @@ export const MetadataInspector: React.FC<MetadataInspectorProps> = ({ metadata, 
                 className={`text-[9px] sm:text-[10px] font-mono px-2 py-0.5 rounded ${
                   metadata.isAiFlagged
                     ? 'bg-rose-950 text-rose-400 border border-rose-800/50'
-                    : 'bg-slate-900 text-slate-400'
+                    : 'bg-emerald-950 text-emerald-400 border border-emerald-800/50'
                 }`}
               >
                 {metadata.isAiFlagged ? 'Triggers Badge' : 'Clean'}
@@ -107,58 +128,62 @@ export const MetadataInspector: React.FC<MetadataInspectorProps> = ({ metadata, 
           </div>
         </div>
 
-        {/* Category 2: Personal Privacy & Location */}
+        {/* Category 2: Camera & Hardware Signature */}
         <div className="bg-[#111726] border border-slate-800 rounded-xl p-3.5 sm:p-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-2.5 sm:mb-3">
               <span className="text-[11px] sm:text-xs font-mono uppercase text-slate-400 flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                Privacy & Location
+                <Camera className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                Camera Hardware
               </span>
               <span
                 className={`text-[9px] sm:text-[10px] font-mono px-2 py-0.5 rounded ${
-                  metadata.hasGps
-                    ? 'bg-amber-950 text-amber-400 border border-amber-800/50'
+                  metadata.hasCameraData
+                    ? 'bg-indigo-950 text-indigo-300 border border-indigo-800/50'
                     : 'bg-slate-900 text-slate-400'
                 }`}
               >
-                {metadata.hasGps ? 'GPS Detected' : 'No GPS'}
+                {metadata.hasCameraData ? 'Camera Detected' : 'No Hardware EXIF'}
               </span>
             </div>
             <div className="space-y-1.5 sm:space-y-2 text-[11px] sm:text-xs">
               <div className="flex justify-between items-center py-1 border-b border-slate-800/60">
-                <span className="text-slate-400">GPS Coordinates:</span>
-                <span className={`font-mono text-right ${metadata.hasGps ? 'text-amber-400 font-semibold' : 'text-slate-400'}`}>
-                  {metadata.hasGps ? 'Coordinates Stored' : 'Not Present'}
+                <span className="text-slate-400">Device Model:</span>
+                <span className={`font-mono text-right truncate max-w-[140px] sm:max-w-[170px] ${metadata.hasCameraData ? 'text-indigo-300 font-semibold' : 'text-slate-400'}`}>
+                  {metadata.cameraModel ? `${metadata.cameraMake ? `${metadata.cameraMake} ` : ''}${metadata.cameraModel}` : 'None'}
                 </span>
               </div>
               <div className="flex justify-between items-center py-1 border-b border-slate-800/60">
-                <span className="text-slate-400">Author / Creator:</span>
-                <span className="font-mono text-slate-200 truncate max-w-[130px] sm:max-w-[160px] text-right">
-                  {metadata.creatorOrAuthor || 'Anonymous'}
+                <span className="text-slate-400">Lens Model:</span>
+                <span className="font-mono text-slate-200 truncate max-w-[130px] sm:max-w-[160px] text-right" title={metadata.lensModel || 'None'}>
+                  {metadata.lensModel || 'Not Specified'}
                 </span>
               </div>
               <div className="flex justify-between items-center py-1 border-b border-slate-800/60">
-                <span className="text-slate-400">Date Timestamp:</span>
-                <span className="font-mono text-slate-200 text-right">
-                  {metadata.dateTaken || 'None'}
+                <span className="text-slate-400">Exposure / ISO:</span>
+                <span className="font-mono text-indigo-300 text-right">
+                  {metadata.cameraExposure || metadata.dateTaken || 'None'}
                 </span>
               </div>
             </div>
           </div>
           <div className="mt-3 pt-2 text-[10px] sm:text-[11px] text-slate-400 flex items-center gap-1">
-            <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span>Wiped in "Full Privacy" mode</span>
+            <Sliders className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+            <span>
+              {metadata.hasCameraData
+                ? 'Valid camera EXIF structure'
+                : 'Inject via "Camera Cloak" mode'}
+            </span>
           </div>
         </div>
 
-        {/* Category 3: Technical Integrity */}
+        {/* Category 3: Technical & Integrity */}
         <div className="bg-[#111726] border border-slate-800 rounded-xl p-3.5 sm:p-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-2.5 sm:mb-3">
               <span className="text-[11px] sm:text-xs font-mono uppercase text-slate-400 flex items-center gap-1.5">
-                <Camera className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                Technical & Color
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                Technical & File
               </span>
               <span className="text-[9px] sm:text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 text-emerald-400 border border-emerald-900/40">
                 {metadata.format}
@@ -172,9 +197,9 @@ export const MetadataInspector: React.FC<MetadataInspectorProps> = ({ metadata, 
                 </span>
               </div>
               <div className="flex justify-between items-center py-1 border-b border-slate-800/60">
-                <span className="text-slate-400">ICC Color Profile:</span>
-                <span className="font-mono text-emerald-400 text-right">
-                  {metadata.hasIccProfile ? 'Embedded' : 'Standard sRGB'}
+                <span className="text-slate-400">GPS Location:</span>
+                <span className={`font-mono text-right ${metadata.hasGps ? 'text-amber-400 font-semibold' : 'text-slate-400'}`}>
+                  {metadata.hasGps ? 'Coordinates Stored' : 'No GPS Data'}
                 </span>
               </div>
               <div className="flex justify-between items-center py-1 border-b border-slate-800/60">
@@ -226,6 +251,7 @@ export const MetadataInspector: React.FC<MetadataInspectorProps> = ({ metadata, 
                     const willStrip =
                       seg.type === 'APP11' ||
                       (selectedMode === 'FULL_PRIVACY' && (seg.type.includes('APP1') || seg.type.includes('EXIF') || seg.type.includes('IPTC'))) ||
+                      (selectedMode === 'CAMERA_CLOAK' && (seg.type.includes('APP11') || seg.type.includes('XMP') || seg.name.includes('AI') || seg.type.includes('caPX'))) ||
                       (selectedMode === 'ANTI_AI' && (seg.type.includes('APP11') || seg.type.includes('XMP') || seg.name.includes('AI') || seg.type.includes('caPX')));
 
                     return (

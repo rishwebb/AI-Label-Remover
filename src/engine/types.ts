@@ -11,16 +11,20 @@ export interface DetectedMetadata {
   aiPromptSnippet?: string;
   isAiFlagged: boolean;
 
-  // Personal Privacy
-  hasGps: boolean;
-  gpsCoordinates?: { lat: number; lng: number; alt?: number };
+  // Camera & Hardware Data
+  hasCameraData: boolean;
   cameraMake?: string;
   cameraModel?: string;
   lensModel?: string;
+  cameraExposure?: string; // e.g. "f/1.78 · ISO 64 · 1/120s"
   dateTaken?: string;
-  serialNumber?: string;
   software?: string;
+  serialNumber?: string;
   creatorOrAuthor?: string;
+
+  // Personal Privacy
+  hasGps: boolean;
+  gpsCoordinates?: { lat: number; lng: number; alt?: number };
 
   // Color & Tech
   colorProfile?: string;
@@ -32,8 +36,8 @@ export interface DetectedMetadata {
 
 export interface RawSegment {
   id: string;
-  type: string; // e.g. "APP11", "APP1", "caPX", "tEXt"
-  name: string; // Human readable name
+  type: string;
+  name: string;
   sizeBytes: number;
   riskCategory: 'AI_PROVENANCE' | 'PERSONAL_PRIVACY' | 'SAFE_TECHNICAL';
   details: string;
