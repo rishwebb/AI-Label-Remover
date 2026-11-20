@@ -1,5 +1,6 @@
 import React from 'react';
 import { ShieldCheck, HelpCircle, Layers, Sparkles } from 'lucide-react';
+import { Logo } from './Logo';
 
 interface NavbarProps {
   activeTab: 'single' | 'batch';
@@ -18,18 +19,16 @@ export const Navbar: React.FC<NavbarProps> = ({
     <header className="border-b border-slate-800/80 bg-[#0c121e]/95 backdrop-blur-md sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2">
         {/* Brand */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 ring-1 ring-cyan-400/30">
-            <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-          </div>
+        <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+          <Logo size={36} />
           <div>
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <span className="font-bold text-base sm:text-lg tracking-wider text-white">TRACELESS</span>
+              <span className="font-extrabold text-base sm:text-lg tracking-wider text-white">TRACELESS</span>
               <span className="text-[9px] sm:text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800/60 hidden xs:inline-block">
                 v2.0
               </span>
             </div>
-            <p className="text-[10px] sm:text-xs text-slate-400 hidden md:block">AI Metadata & Privacy Sanitizer</p>
+            <p className="text-[10px] sm:text-xs text-slate-400 hidden md:block">AI Metadata &amp; Privacy Sanitizer</p>
           </div>
         </div>
 
